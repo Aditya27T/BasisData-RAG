@@ -58,3 +58,27 @@ LlamaParse live belum diuji karena API key masih placeholder.
 `ask` melakukan satu retry lalu gagal dengan pesan jelas. Ekstraksi KG dengan model ini
 masih gagal (butuh model yang patuh structured output); keputusan model milik pemilik proyek.
 
+
+## M0.3b — dependensi LangGraph — 2026-10-24
+
+**Versi di-pin:** `langgraph==1.2.17` (terbaru saat verifikasi).
+
+**Kesesuaian dependensi:** `langgraph 1.2.17` butuh `langchain-core>=1.4.7,<2`; terpasang
+`langchain-core 1.7.0`. Entry point `hybrid-rag` hanya memakai `langchain-core`, sehingga
+tidak ada bentrok.
+
+**Paket tambahan yang tertarik:** `langgraph-checkpoint`, `langgraph-prebuilt`,
+`langgraph-sdk`, `xxhash`. Ukuran/waktu instalasi bertambah, tidak ada layanan baru.
+
+**Penempatan:** LangGraph dipakai di aplikasi host (`app/graph/`) dan tidak ditambahkan
+sebagai dependensi `hybrid-rag`, supaya engine tetap ringan dan bisa dipakai tanpa graf.
+
+**Catatan implementasi:**
+- `ask()` (fungsi biasa) dan `ask_graph()` memakai fungsi yang sama di `app/answer.py`;
+  uji paritas `eval/parity.py` lulus 3/3 pada dokumen uji.
+- Anggaran panggilan LLM terverifikasi: `attempts = 1 + LANGGRAPH_MAX_RETRIES`
+  (diuji untuk 0, 1, 2 retry; sama pada kedua implementasi).
+- `RETRIEVAL_MIN_SCORE` belum diaktifkan: `retrieve_context` tidak mengekspos skor per
+  chunk, jadi `decide` memakai heuristik konteks kosong sampai eval M3 menetapkan ambang.
+- `retrieve` memakai `return_parent` dari flag CLI (bukan dipaksa `True`) agar paritas
+  `ask()` vs `ask_graph()` tetap terjaga untuk parameter yang sama.

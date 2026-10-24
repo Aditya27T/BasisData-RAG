@@ -390,6 +390,8 @@ Instance singleton: `from hybrid_rag.config import settings`.
 | `ENABLE_CONTEXTUALIZE` | True | `false` mematikan contextualize per child (dipakai v1) |
 | `LLAMA_CLOUD_API_KEY` | None | API key LlamaParse untuk PDF/Office |
 | `PARSED_DIR` | `data/parsed` | Direktori cache hasil parse `<sha256>.json` |
+| `LANGGRAPH_MAX_RETRIES` | 1 | Retry maksimum `verify → generate` di `ask_graph()` |
+| `RETRIEVAL_MIN_SCORE` | None | Ambang `decide`; no-op selama engine belum mengekspos skor chunk |
 
 #### Embedding
 | Env var | Default | Keterangan |
@@ -1169,8 +1171,13 @@ Tambahkan ke bagian 10 (konfigurasi): `LANGGRAPH_MAX_RETRIES=1`, `RETRIEVAL_MIN_
 Tambahkan ke bagian 14 (struktur): `app/graph/ask_graph.py` dan `app/graph/state.py`.
 
 Tambahkan ke bagian 15 (urutan kerja):
-- [ ] **M0.3b** Periksa `hybrid-rag/pyproject.toml` untuk dependensi LangChain/LangGraph. Catat di `docs/DECISIONS.md`. Verifikasi versi LangGraph terkini dan pin versinya.
-- [ ] **M1b** (setelah M1 selesai dan lolos) Bungkus fungsi M1 dalam graf bagian 16. Jalankan uji paritas.
+- [x] **M0.3b** Diperiksa: `langchain-core>=1.0,<2` (terpasang 1.7.0). LangGraph di-pin
+  `langgraph==1.2.17` (butuh `langchain-core>=1.4.7,<2`; menarik `langgraph-checkpoint`,
+  `langgraph-prebuilt`, `langgraph-sdk`, `xxhash`). Tercatat di `docs/DECISIONS.md`.
+- [x] **M1b** Implementasi: `app/answer.py` (fungsi biasa), `app/graph/state.py`,
+  `app/graph/ask_graph.py`, `--graph` di `ask`, uji paritas `eval/parity.py`.
+  `RETRIEVAL_MIN_SCORE` belum bisa dipakai karena `retrieve_context` tidak mengembalikan
+  skor per chunk; `decide` memakai heuristik konteks kosong sampai eval M3 menetapkan ambang.
 
 
 *Dokumen ini digenerate dari analisis kode pada 2026-10-24. Verifikasi ke kode sebelum implementasi.*

@@ -70,6 +70,9 @@ def build_sources(
                 "file_path": chunk.get("file_path") or "unknown_source",
                 "headings": list(headings),
                 "page_label": label,
+                "page_first": _one_based(sidecar.get("page_start")),
+                "page_last": _one_based(sidecar.get("page_end"))
+                or _one_based(sidecar.get("page_start")),
                 "chunk_id": chunk.get("chunk_id"),
             }
         )
@@ -81,9 +84,9 @@ def render_sources(sources: list[dict]) -> str:
     if not sources:
         return ""
 
-    lines = ["Sumber yang diambil (pakai untuk sitasi):"]
+    lines = ["Sumber yang diambil (nomor hanya indeks, bukan format sitasi):"]
     for source in sources:
-        line = f"- [{source['reference_id']}] {source['file_path']}"
+        line = f"- ({source['reference_id']}) {source['file_path']}"
         details: list[str] = []
         if source.get("page_label"):
             details.append(source["page_label"])
@@ -93,6 +96,16 @@ def render_sources(sources: list[dict]) -> str:
             line += " — " + ", ".join(details)
         lines.append(line)
     return "\n".join(lines)
+
+
+def _one_based(value: object) -> int | None:
+    """Konversi indeks halaman 0-based (sidecar) ke nomor halaman 1-based."""
+    if value is None:
+        return None
+    try:
+        return int(value) + 1
+    except (TypeError, ValueError):
+        return None
 
 
 def chunk_ids(chunks: Iterable[dict]) -> list[str]:

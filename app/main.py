@@ -12,6 +12,7 @@ Contoh pemakaian:
   python -m app.main ingest
   python -m app.main ingest data/originals/catatan.md
   python -m app.main ask "Apa itu RAG hybrid?"
+  python -m app.main ask --graph "Apa itu RAG hybrid?"
   python -m app.main list
   python -m app.main delete doc-abc123...
 
@@ -19,6 +20,7 @@ Atau via CLI entry point (setelah pip install -e .):
   cobarag probe-embedding
   cobarag ingest
   cobarag ask "Pertanyaan?"
+  cobarag ask --graph "Pertanyaan?"
   cobarag list
   cobarag delete <doc_id>
 """
@@ -84,6 +86,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Kembalikan teks parent (lebih panjang) bukan child chunk",
     )
     p_ask.add_argument(
+        "--graph", "-g",
+        action="store_true",
+        dest="use_graph",
+        help="Orkestrasi retrieve/decide/generate/verify dengan LangGraph",
+    )
+    p_ask.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Tampilkan chunk yang diambil (debug)",
@@ -139,6 +147,7 @@ def main(argv: list[str] | None = None) -> None:
             workspace=workspace,
             return_parent=args.return_parent,
             verbose=args.verbose,
+            use_graph=args.use_graph,
         )
 
     elif args.command == "list":
