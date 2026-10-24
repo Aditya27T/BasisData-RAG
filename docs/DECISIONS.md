@@ -82,3 +82,25 @@ sebagai dependensi `hybrid-rag`, supaya engine tetap ringan dan bisa dipakai tan
   chunk, jadi `decide` memakai heuristik konteks kosong sampai eval M3 menetapkan ambang.
 - `retrieve` memakai `return_parent` dari flag CLI (bukan dipaksa `True`) agar paritas
   `ask()` vs `ask_graph()` tetap terjaga untuk parameter yang sama.
+
+## Migrasi LlamaParse ke Parse API v2 — 2026-10-24
+
+**Sebab:** Parse API v1 menolak akun ini dengan HTTP 410 ("The v1 Parse API is not available
+for this account"). Endpoint lama `api/parsing/upload|job/...` tidak bisa dipakai lagi.
+
+**v2 yang dipakai:**
+- `POST https://api.cloud.llamaindex.ai/api/v2/parse/upload` (multipart `file` +
+  `configuration` JSON berisi `tier` dan `version`)
+- `GET /api/v2/parse/{job_id}` untuk polling (`job.status`: `COMPLETED`/`FAILED`/`CANCELLED`)
+- `GET /api/v2/parse/{job_id}?expand=markdown` untuk hasil per halaman
+  (`markdown.pages[]` dengan `page_number`, `success`, `markdown`)
+
+**Tier:** `cost_effective` + `version=latest` (default), bisa diubah lewat
+`LLAMA_PARSE_TIER`/`LLAMA_PARSE_VERSION`. Dokumen uji 2 halaman berhasil (5 blok konten).
+
+**Cache:** selalu dipakai untuk isi berkas yang sama (sha256); `--force` hanya menghapus
+dokumen lama lalu ingest ulang, tidak memanggil LlamaParse lagi (PRD prinsip 4).
+
+**Bug yang ditemukan dan diperbaiki:** pipeline memperlakukan doc_id yang sudah ada sebagai
+duplikat dan menulis baris `dup-…` berstatus FAILED saat re-ingest. `ingest --force` kini
+memanggil `delete_document(..., delete_llm_cache=False)` lebih dulu.

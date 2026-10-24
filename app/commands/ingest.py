@@ -45,7 +45,7 @@ def _read_text_as_content_list(path: Path) -> list[dict]:
     return [{"type": "text", "text": text, "page_idx": 0}]
 
 
-async def _parse_with_llamaparse(path: Path, doc_id: str, force: bool = False) -> list[dict]:
+async def _parse_with_llamaparse(path: Path, doc_id: str) -> list[dict]:
     """Parse PDF/Office lewat LlamaParse; hasil di-cache di data/parsed/."""
     from hybrid_rag.config import settings
 
@@ -56,7 +56,8 @@ async def _parse_with_llamaparse(path: Path, doc_id: str, force: bool = False) -
         sha256=doc_id.removeprefix("doc-"),
         parsed_dir=PARSED_DIR,
         api_key=settings.llama_cloud_api_key,
-        force=force,
+        tier=settings.llama_parse_tier,
+        version=settings.llama_parse_version,
     )
 
 
@@ -110,7 +111,7 @@ async def _ingest_one(
         if ext in _TEXT_EXTENSIONS:
             content_list = _read_text_as_content_list(path)
         else:
-            content_list = await _parse_with_llamaparse(path, doc_id, force=force)
+            content_list = await _parse_with_llamaparse(path, doc_id)
     except _LlamaQuotaError as exc:
         result["status"] = "quota"
         result["message"] = str(exc)
@@ -119,6 +120,14 @@ async def _ingest_one(
         result["status"] = "error"
         result["message"] = f"Parse gagal: {exc}"
         return result
+
+    # ── --force: hapus dulu supaya pipeline tidak mencatat baris dup- FAILED ──
+    # Pipeline memperlakukan doc_id yang sudah ada sebagai duplikat (membuat
+    # record "dup-" berstatus FAILED). Re-ingest harus menghapus yang lama dulu.
+    if force:
+        from hybrid_rag.ingestion import delete_document
+
+        await delete_document(doc_id=doc_id, workspace=workspace, delete_llm_cache=False)
 
     # ── Insert ke storage ──
     try:

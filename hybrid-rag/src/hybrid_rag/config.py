@@ -118,6 +118,8 @@ class RagSettings(BaseSettings):
     #: Parser PDF/Office (PRD: LlamaParse) dan direktori cache hasil parse.
     llama_cloud_api_key: Optional[str] = Field(default=None, validation_alias="LLAMA_CLOUD_API_KEY")
     parsed_dir: str = Field(default="data/parsed", validation_alias="PARSED_DIR")
+    llama_parse_tier: str = Field(default="cost_effective", validation_alias="LLAMA_PARSE_TIER")
+    llama_parse_version: str = Field(default="latest", validation_alias="LLAMA_PARSE_VERSION")
     max_parallel_office_convert: int = Field(default=2, validation_alias="MAX_PARALLEL_OFFICE_CONVERT")
     unoserver_host: str = Field(default="unoserver", validation_alias="UNOSERVER_HOST")
     unoserver_port: int = Field(default=2003, validation_alias="UNOSERVER_PORT")

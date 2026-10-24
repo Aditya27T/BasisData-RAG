@@ -390,6 +390,8 @@ Instance singleton: `from hybrid_rag.config import settings`.
 | `ENABLE_CONTEXTUALIZE` | True | `false` mematikan contextualize per child (dipakai v1) |
 | `LLAMA_CLOUD_API_KEY` | None | API key LlamaParse untuk PDF/Office |
 | `PARSED_DIR` | `data/parsed` | Direktori cache hasil parse `<sha256>.json` |
+| `LLAMA_PARSE_TIER` | `cost_effective` | Tier Parse API v2 (`fast`/`cost_effective`/`agentic`/`agentic_plus`) |
+| `LLAMA_PARSE_VERSION` | `latest` | Versi tier Parse v2; pin tanggal untuk produksi |
 | `LANGGRAPH_MAX_RETRIES` | 1 | Retry maksimum `verify → generate` di `ask_graph()` |
 | `RETRIEVAL_MIN_SCORE` | None | Ambang `decide`; no-op selama engine belum mengekspos skor chunk |
 

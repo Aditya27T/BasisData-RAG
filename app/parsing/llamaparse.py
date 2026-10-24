@@ -20,7 +20,7 @@ from typing import Any
 
 import httpx
 
-LLAMA_BASE_URL = "https://api.cloud.llamaindex.ai/api/parsing"
+LLAMA_BASE_URL = "https://api.cloud.llamaindex.ai/api/v2/parse"
 POLL_INTERVAL_SECONDS = 3.0
 POLL_TIMEOUT_SECONDS = 900.0
 
@@ -93,13 +93,15 @@ def markdown_to_content_list(pages: list[dict[str, Any]]) -> list[dict]:
     content_list: list[dict] = []
 
     for index, page in enumerate(pages):
-        page_number = page.get("page", index + 1)
+        if page.get("success") is False:
+            continue
+        page_number = page.get("page_number") or page.get("page") or (index + 1)
         try:
             page_idx = max(0, int(page_number) - 1)
         except (TypeError, ValueError):
             page_idx = index
 
-        markdown = str(page.get("md") or page.get("markdown") or "")
+        markdown = str(page.get("markdown") or page.get("md") or "")
         buffer: list[str] = []
 
         def flush() -> None:
@@ -154,7 +156,10 @@ async def _request(
     return response
 
 
-async def _upload(client: httpx.AsyncClient, path: Path, api_key: str) -> str:
+async def _upload(
+    client: httpx.AsyncClient, path: Path, api_key: str, tier: str, version: str
+) -> str:
+    configuration = json.dumps({"tier": tier, "version": version})
     with open(path, "rb") as handle:
         response = await _request(
             client,
@@ -162,7 +167,7 @@ async def _upload(client: httpx.AsyncClient, path: Path, api_key: str) -> str:
             f"{LLAMA_BASE_URL}/upload",
             api_key=api_key,
             files={"file": (path.name, handle, "application/octet-stream")},
-            data={"result_type": "markdown"},
+            data={"configuration": configuration},
         )
     if response.status_code >= 400:
         raise LlamaParseError(
@@ -178,17 +183,21 @@ async def _wait_for_job(client: httpx.AsyncClient, job_id: str, api_key: str) ->
     elapsed = 0.0
     while elapsed < POLL_TIMEOUT_SECONDS:
         response = await _request(
-            client, "GET", f"{LLAMA_BASE_URL}/job/{job_id}", api_key=api_key
+            client, "GET", f"{LLAMA_BASE_URL}/{job_id}", api_key=api_key
         )
         if response.status_code >= 400:
             raise LlamaParseError(
                 f"Polling LlamaParse gagal (HTTP {response.status_code}): {response.text[:300]}"
             )
-        status = str((response.json() or {}).get("status", "")).upper()
-        if status in {"SUCCESS", "COMPLETED"}:
+        job = (response.json() or {}).get("job") or {}
+        status = str(job.get("status", "")).upper()
+        if status == "COMPLETED":
             return
-        if status in {"ERROR", "FAILED", "CANCELLED"}:
-            raise LlamaParseError(f"Job LlamaParse berakhir dengan status {status}")
+        if status in {"FAILED", "CANCELLED"}:
+            detail = job.get("error_message") or ""
+            raise LlamaParseError(
+                f"Job LlamaParse berakhir dengan status {status}: {detail[:300]}"
+            )
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
         elapsed += POLL_INTERVAL_SECONDS
     raise LlamaParseError(
@@ -200,9 +209,9 @@ async def _fetch_pages(client: httpx.AsyncClient, job_id: str, api_key: str) -> 
     response = await _request(
         client,
         "GET",
-        f"{LLAMA_BASE_URL}/job/{job_id}/result/markdown",
+        f"{LLAMA_BASE_URL}/{job_id}",
         api_key=api_key,
-        params={"result_type": "markdown"},
+        params={"expand": "markdown"},
     )
     if response.status_code >= 400:
         raise LlamaParseError(
@@ -211,15 +220,16 @@ async def _fetch_pages(client: httpx.AsyncClient, job_id: str, api_key: str) -> 
         )
 
     payload = response.json() or {}
-    pages = payload.get("pages")
+    markdown_block = payload.get("markdown") or {}
+    pages = markdown_block.get("pages")
     if isinstance(pages, list) and pages:
         return [page for page in pages if isinstance(page, dict)]
 
-    markdown = payload.get("markdown") or payload.get("md")
+    markdown = payload.get("markdown_full")
     if isinstance(markdown, str) and markdown.strip():
-        return [{"page": 1, "md": markdown}]
+        return [{"page_number": 1, "markdown": markdown, "success": True}]
 
-    raise LlamaParseError("Hasil LlamaParse tidak memuat halaman maupun markdown")
+    raise LlamaParseError("Hasil LlamaParse tidak memuat halaman markdown")
 
 
 async def parse_to_content_list(
@@ -228,13 +238,18 @@ async def parse_to_content_list(
     sha256: str,
     parsed_dir: Path,
     api_key: str | None,
-    force: bool = False,
+    tier: str = "cost_effective",
+    version: str = "latest",
 ) -> list[dict]:
-    """Parse satu berkas PDF/Office, memakai cache bila ada."""
-    if not force:
-        cached = read_cache(parsed_dir, sha256)
-        if cached is not None:
-            return cached
+    """Parse satu berkas PDF/Office.
+
+    Cache selalu dipakai untuk isi berkas yang sama (sha256): PRD prinsip 4
+    melarang memanggil LlamaParse dua kali. `--force` di CLI hanya memaksa
+    ingest ulang, bukan parse ulang.
+    """
+    cached = read_cache(parsed_dir, sha256)
+    if cached is not None:
+        return cached
 
     if not api_key:
         raise LlamaParseError(
@@ -244,7 +259,7 @@ async def parse_to_content_list(
 
     timeout = httpx.Timeout(120.0, connect=30.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        job_id = await _upload(client, path, api_key)
+        job_id = await _upload(client, path, api_key, tier, version)
         await _wait_for_job(client, job_id, api_key)
         pages = await _fetch_pages(client, job_id, api_key)
 
