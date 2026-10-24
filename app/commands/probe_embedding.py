@@ -19,7 +19,6 @@ from typing import Any
 
 import numpy as np
 
-
 DECISIONS_PATH = Path(__file__).resolve().parent.parent.parent / "docs" / "DECISIONS.md"
 
 _TEST_TEXTS = [
@@ -123,7 +122,9 @@ async def run(verbose: bool = True) -> dict[str, Any]:
         avg_ms = sum(latencies) / len(latencies)
         result["avg_latency_ms"] = round(avg_ms, 1)
         latency_ok = avg_ms < 10_000  # < 10 detik masih acceptable
-        result["tests"].append({"name": "latensi", "avg_ms": round(avg_ms, 1), "passed": latency_ok})
+        result["tests"].append(
+            {"name": "latensi", "avg_ms": round(avg_ms, 1), "passed": latency_ok}
+        )
         if not latency_ok:
             result["passed"] = False
             result["errors"].append(f"Latensi terlalu tinggi: {avg_ms:.0f}ms")
@@ -136,15 +137,19 @@ async def run(verbose: bool = True) -> dict[str, Any]:
 
     # ── Test 3: similarity check ──
     if verbose:
-        print("[probe] test 3: similarity (kalimat mirip > kalimat tidak relevan)...", end=" ", flush=True)
+        print(
+            "[probe] test 3: similarity (kalimat mirip > kalimat tidak relevan)...",
+            end=" ",
+            flush=True,
+        )
 
     try:
         vecs = await _embed_all(_TEST_TEXTS)
         sim_results = []
         all_sim_ok = True
-        for (i, j, k, l) in _SIMILARITY_CHECKS:
+        for (i, j, k, d) in _SIMILARITY_CHECKS:
             sim_ij = _cosine(vecs[i], vecs[j])
-            sim_kl = _cosine(vecs[k], vecs[l])
+            sim_kl = _cosine(vecs[k], vecs[d])
             ok = sim_ij > sim_kl
             if not ok:
                 all_sim_ok = False
@@ -153,7 +158,7 @@ async def run(verbose: bool = True) -> dict[str, Any]:
                 "text_b": _TEST_TEXTS[j][:40],
                 "sim_ab": round(sim_ij, 4),
                 "text_c": _TEST_TEXTS[k][:40],
-                "text_d": _TEST_TEXTS[l][:40],
+                "text_d": _TEST_TEXTS[d][:40],
                 "sim_cd": round(sim_kl, 4),
                 "passed": ok,
             })
@@ -190,7 +195,8 @@ def _render_markdown(result: dict[str, Any]) -> str:
         f"**Status:** {status}  ",
         f"**Provider:** `{result.get('provider_host', '?')}`  ",
         f"**Model:** `{result.get('model', '?')}`  ",
-        f"**Dimensi:** {result.get('actual_dim', '?')} (diharap {result.get('expected_dim', '?')})  ",
+        f"**Dimensi:** {result.get('actual_dim', '?')} "
+        f"(diharap {result.get('expected_dim', '?')})  ",
         f"**Latensi rata-rata:** {result.get('avg_latency_ms', '?')} ms  ",
         "",
     ]

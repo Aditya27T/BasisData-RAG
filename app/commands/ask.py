@@ -15,9 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
-from typing import Optional
-
 
 _SYSTEM_PROMPT = """\
 Kamu adalah asisten yang menjawab pertanyaan HANYA berdasarkan dokumen yang \
@@ -28,8 +27,11 @@ Aturan wajib:
 dari pengetahuanmu sendiri.
 2. Jika informasi tidak ada di konteks, jawab dengan tepat: \
 "Informasi tersebut tidak ditemukan di dokumen."
-3. Setiap klaim dalam jawaban HARUS disertai sitasi dalam format: \
-[nama_berkas, halaman N] atau [nama_berkas] jika halaman tidak tersedia.
+3. Setiap klaim dalam jawaban HARUS disertai sitasi. Pilih format yang datanya \
+tersedia, jangan mengarang nomor halaman:
+   - [nama_berkas, "bagian"] bila nama bagian/heading tersedia
+   - [nama_berkas, hal. N] bila nomor halaman tersedia di konteks
+   - [nama_berkas] bila keduanya tidak tersedia
 4. Jika konteks kosong atau tidak relevan dengan pertanyaan, jawab: \
 "Informasi tersebut tidak ditemukan di dokumen."
 
@@ -62,6 +64,31 @@ async def _call_llm(question: str, context: str) -> str:
     return response.content
 
 
+_DEGENERATE_RE = re.compile(r"^\s*(user\s+safety|safety)\s*:", re.IGNORECASE)
+
+
+def _is_degenerate(answer: str) -> bool:
+    """Jawaban kosong atau stub keamanan, bukan jawaban dokumen."""
+    text = (answer or "").strip()
+    return not text or bool(_DEGENERATE_RE.match(text))
+
+
+async def _answer_with_guard(question: str, context: str) -> str:
+    """Satu retry terbatas bila model membalas stub/kosong (PRD prinsip 5)."""
+    answer = await _call_llm(question, context)
+    if not _is_degenerate(answer):
+        return answer
+
+    print("(jawaban model tidak valid, mencoba sekali lagi)", file=sys.stderr)
+    answer = await _call_llm(question, context)
+    if _is_degenerate(answer):
+        raise RuntimeError(
+            "Model LLM mengembalikan jawaban tidak valid (stub keamanan/kosong) "
+            "dua kali. Ganti LLM_MODEL ke model yang mendukung chat biasa."
+        )
+    return answer
+
+
 async def run(
     question: str,
     workspace: str | None = None,
@@ -86,22 +113,42 @@ async def run(
             question,
             workspace=ws,
             return_parent=return_parent,
-            include_raw_data=verbose,
+            include_raw_data=True,
         )
     except Exception as exc:
         print(f"✗ Retrieval gagal: {exc}", file=sys.stderr)
         raise SystemExit(1)
 
     context = result.context.strip()
+    chunks = (result.raw_data.get("data") or {}).get("chunks") or []
 
-    if verbose and result.raw_data:
-        chunks = (result.raw_data.get("data") or {}).get("chunks") or []
+    from app.citations import build_sources, chunk_ids, render_sources
+
+    # Sidecar chunk menyimpan page_start/page_end; engine tidak membawanya ke
+    # hasil retrieval, jadi dibaca langsung dari text_chunks untuk sitasi halaman.
+    pages_by_chunk: dict[str, dict] = {}
+    ids = chunk_ids(chunks)
+    if ids:
+        try:
+            from hybrid_rag.retrieval import workspace_pool
+
+            async with workspace_pool.lease(ws) as retriever:
+                rows = await retriever.text_chunks.get_by_ids(ids)
+            for row in rows or []:
+                sidecar = row.get("sidecar") if isinstance(row, dict) else None
+                if isinstance(sidecar, dict):
+                    pages_by_chunk[str(row.get("id"))] = sidecar
+        except Exception as exc:
+            print(f"[peringatan] gagal membaca metadata halaman: {exc}", file=sys.stderr)
+
+    sources = build_sources(chunks, pages_by_chunk)
+    sources_block = render_sources(sources)
+
+    if verbose:
         print(f"[debug] chunk ditemukan: {len(chunks)}")
         for i, c in enumerate(chunks[:3], 1):
             fp = c.get("file_path", "?")
-            meta = c.get("meta") or {}
-            pg = meta.get("page_start", "?")
-            print(f"  [{i}] {fp} hal.{pg} — {c.get('content','')[:60]}…")
+            print(f"  [{i}] {fp} — {c.get('content','')[:60]}…")
         print()
 
     # ── Penolakan dini ──
@@ -114,7 +161,9 @@ async def run(
     # ── Generate jawaban ──
     print("Menyusun jawaban...", end=" ", flush=True)
     try:
-        answer = await _call_llm(question, context)
+        answer = await _answer_with_guard(
+            question, f"{context}\n\n{sources_block}".strip()
+        )
         print("✓")
     except Exception as exc:
         print(f"✗ LLM gagal: {exc}", file=sys.stderr)
@@ -125,6 +174,10 @@ async def run(
     print("Jawaban:")
     print(answer)
     print("─" * 60)
+
+    if sources_block:
+        print()
+        print(sources_block)
 
     # ── Cetak path gambar jika ada ──
     if result.image_paths:

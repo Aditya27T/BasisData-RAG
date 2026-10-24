@@ -15,11 +15,10 @@ sehingga satu .env mengkonfigurasi keduanya sekaligus.
 from __future__ import annotations
 
 import sys
+from contextvars import ContextVar
 from typing import Any
 
 from hybrid_rag import providers
-from hybrid_rag.config import settings
-
 
 # ---------------------------------------------------------------------------
 # LLM factory
@@ -124,9 +123,6 @@ class _NoOpS3:
 # ---------------------------------------------------------------------------
 # Progress reporter — cetak stage ke stderr
 # ---------------------------------------------------------------------------
-
-from contextvars import ContextVar
-
 
 class _CliProgress:
     """Cetak event progres ke stderr agar tidak campur dengan output stdout.

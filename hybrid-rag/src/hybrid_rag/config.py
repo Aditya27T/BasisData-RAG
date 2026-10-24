@@ -89,6 +89,8 @@ class RagSettings(BaseSettings):
     child_chunk_overlap: int = Field(default=50, validation_alias="CHILD_CHUNK_OVERLAP")
     contextualize_model: Optional[str] = Field(default=None, validation_alias="CONTEXTUALIZE_MODEL")
     contextualize_max_async: int = Field(default=10, validation_alias="CONTEXTUALIZE_MAX_ASYNC")
+    #: PRD v1 mematikan contextualize per child (biaya LLM per chunk).
+    enable_contextualize: bool = Field(default=True, validation_alias="ENABLE_CONTEXTUALIZE")
     leading_context_tokens: int = Field(default=500, validation_alias="LEADING_CONTEXT_TOKENS")
     trailing_context_tokens: int = Field(default=500, validation_alias="TRAILING_CONTEXT_TOKENS")
     max_gleaning: int = Field(default=1, validation_alias="MAX_GLEANING")
@@ -113,6 +115,9 @@ class RagSettings(BaseSettings):
     textract_secret_access_key: Optional[str] = Field(default=None, validation_alias="TEXTRACT_SECRET_ACCESS_KEY")
     textract_region: Optional[str] = Field(default=None, validation_alias="TEXTRACT_REGION")
     textract_max_concurrent_jobs: int = Field(default=50, validation_alias="TEXTRACT_MAX_CONCURRENT_JOBS")
+    #: Parser PDF/Office (PRD: LlamaParse) dan direktori cache hasil parse.
+    llama_cloud_api_key: Optional[str] = Field(default=None, validation_alias="LLAMA_CLOUD_API_KEY")
+    parsed_dir: str = Field(default="data/parsed", validation_alias="PARSED_DIR")
     max_parallel_office_convert: int = Field(default=2, validation_alias="MAX_PARALLEL_OFFICE_CONVERT")
     unoserver_host: str = Field(default="unoserver", validation_alias="UNOSERVER_HOST")
     unoserver_port: int = Field(default=2003, validation_alias="UNOSERVER_PORT")

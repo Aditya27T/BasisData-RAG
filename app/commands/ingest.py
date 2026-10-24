@@ -18,14 +18,15 @@ import hashlib
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
+from app.parsing.llamaparse import LlamaQuotaError as _LlamaQuotaError
 
 ORIGINALS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "originals"
+PARSED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "parsed"
 
-# Ekstensi yang bisa diproses di M0-M1 (tanpa LlamaParse)
+# Ekstensi yang diproses lokal (tanpa cloud)
 _TEXT_EXTENSIONS = {".md", ".markdown", ".txt"}
-# Ekstensi yang butuh LlamaParse (M2)
+# Ekstensi yang butuh LlamaParse
 _LLAMAPARSE_EXTENSIONS = {".pdf", ".docx", ".pptx", ".doc", ".ppt"}
 
 
@@ -44,11 +45,26 @@ def _read_text_as_content_list(path: Path) -> list[dict]:
     return [{"type": "text", "text": text, "page_idx": 0}]
 
 
+async def _parse_with_llamaparse(path: Path, doc_id: str, force: bool = False) -> list[dict]:
+    """Parse PDF/Office lewat LlamaParse; hasil di-cache di data/parsed/."""
+    from hybrid_rag.config import settings
+
+    from app.parsing.llamaparse import parse_to_content_list
+
+    return await parse_to_content_list(
+        path,
+        sha256=doc_id.removeprefix("doc-"),
+        parsed_dir=PARSED_DIR,
+        api_key=settings.llama_cloud_api_key,
+        force=force,
+    )
+
+
 async def _is_already_processed(doc_id: str, workspace: str) -> bool:
     """Cek apakah doc_id sudah PROCESSED di storage."""
     try:
-        from hybrid_rag.ingestion import workspace_pool
         from hybrid_rag.core.base import DocStatus
+        from hybrid_rag.ingestion import workspace_pool
 
         async with workspace_pool.lease(workspace) as rag:
             doc = await rag.doc_status.get_by_id(doc_id)
@@ -79,11 +95,6 @@ async def _ingest_one(
         result["message"] = f"Ekstensi {ext} tidak didukung"
         return result
 
-    if ext in _LLAMAPARSE_EXTENSIONS:
-        result["status"] = "skip"
-        result["message"] = "PDF/Office butuh LlamaParse (diimplementasi di M2)"
-        return result
-
     # ── Hitung doc_id dari sha256 isi file ──
     doc_id = "doc-" + _sha256_file(path)
     result["doc_id"] = doc_id
@@ -99,8 +110,11 @@ async def _ingest_one(
         if ext in _TEXT_EXTENSIONS:
             content_list = _read_text_as_content_list(path)
         else:
-            # Tidak akan sampai sini karena sudah dicek di atas
-            raise NotImplementedError(f"Parser untuk {ext} belum ada")
+            content_list = await _parse_with_llamaparse(path, doc_id, force=force)
+    except _LlamaQuotaError as exc:
+        result["status"] = "quota"
+        result["message"] = str(exc)
+        return result
     except Exception as exc:
         result["status"] = "error"
         result["message"] = f"Parse gagal: {exc}"
@@ -108,6 +122,7 @@ async def _ingest_one(
 
     # ── Insert ke storage ──
     try:
+        from hybrid_rag.core.base import DocStatus
         from hybrid_rag.ingestion import workspace_pool
 
         async with workspace_pool.lease(workspace) as rag:
@@ -117,6 +132,17 @@ async def _ingest_one(
                 doc_id=doc_id,
                 save_parent=True,
             )
+            # Pipeline menelan kegagalan per-dokumen dan menandainya FAILED;
+            # baca status akhir supaya CLI tidak melaporkan "berhasil" palsu.
+            status_doc = await rag.doc_status.get_by_id(doc_id) or {}
+
+        final_status = status_doc.get("status")
+        if final_status == DocStatus.FAILED:
+            error_msg = status_doc.get("error_msg") or "tahap pipeline gagal"
+            result["status"] = "error"
+            result["message"] = f"Pipeline FAILED: {error_msg}"
+            return result
+
         result["status"] = "ok"
         result["message"] = f"Berhasil ({len(content_list)} blok konten)"
     except Exception as exc:
@@ -152,7 +178,7 @@ async def run(
     print(f"File      : {len(paths)} item")
     print()
 
-    ok = skip = error = 0
+    ok = skip = error = quota = 0
     for path in paths:
         if not path.exists():
             print(f"  ✗ {path.name} — file tidak ditemukan")
@@ -170,12 +196,20 @@ async def run(
         elif result["status"] == "skip":
             print(f"⏭  {result['message']}")
             skip += 1
+        elif result["status"] == "quota":
+            # PRD prinsip 5: berhenti, jangan ulang tanpa batas. Sisa file
+            # menunggu kredit/kuota tersedia; cache parse tetap dipakai.
+            print(f"⛔ {result['message']}", file=sys.stderr)
+            quota += 1
+            break
         else:
             print(f"✗  {result['message']}", file=sys.stderr)
             error += 1
 
     print()
     print(f"Selesai: {ok} berhasil, {skip} dilewati, {error} gagal")
+    if quota:
+        print("Dihentikan karena kuota LlamaParse habis; jalankan ingest lagi nanti.")
 
 
 def cmd_ingest(

@@ -386,7 +386,10 @@ Instance singleton: `from hybrid_rag.config import settings`.
 | `VLM_MAX_ASYNC` | 3 | Konkurensi VLM per dokumen |
 | `VLM_TIMEOUT` | 120.0 | Timeout per panggilan VLM (detik) |
 | `MAX_RETRIES` | 5 | Retry maksimum |
-| `CONTEXTUALIZE_MODEL` | None (→ LLM_MODEL) | Model contextualize (v1: dimatikan) |
+| `CONTEXTUALIZE_MODEL` | None (→ LLM_MODEL) | Model contextualize |
+| `ENABLE_CONTEXTUALIZE` | True | `false` mematikan contextualize per child (dipakai v1) |
+| `LLAMA_CLOUD_API_KEY` | None | API key LlamaParse untuk PDF/Office |
+| `PARSED_DIR` | `data/parsed` | Direktori cache hasil parse `<sha256>.json` |
 
 #### Embedding
 | Env var | Default | Keterangan |
@@ -1006,18 +1009,18 @@ ENABLE_LLM_CACHE=true
 
 | Kebutuhan PRD | Status di hybrid-rag | Tindakan |
 |---|---|---|
-| LlamaParse sebagai parser PDF/Office | ❌ Tidak ada (ada Textract) | Buat `ingestion/parser/llamaparse.py` dan integrasikan ke `pipeline.py` |
+| LlamaParse sebagai parser PDF/Office | ✅ Ada di aplikasi host (`app/parsing/llamaparse.py`, cache `data/parsed/<sha256>.json`) | Dipanggil dari `app/commands/ingest.py` |
 | Parser md lokal | ✅ Ada (`_read_text_document()`) | Sudah jalan |
-| Cache hasil parse LlamaParse ke disk | ❌ Tidak ada | Tambah logika cache di `pipeline.py` (simpan ke `data/parsed/<sha256>.json`) |
+| Cache hasil parse LlamaParse ke disk | ✅ Ada di `app/parsing/llamaparse.py` | Baca/tulis cache atomik sebelum memanggil LlamaParse |
 | `doc_id = sha256(isi file)` | ⚠️ Partial (`_generate_content_based_doc_id`) | Hitung sha256 di luar dan berikan eksplisit ke `insert_content_list(doc_id=...)` |
 | Chunking parent-child | ✅ Ada | Sudah jalan |
 | Hybrid retrieval (vektor + BM25 + RRF) | ✅ Ada | Sudah jalan |
 | Graf Neo4j sebagai opsi | ✅ Ada | Biarkan `NEO4J_URI` kosong untuk mematikan |
 | Rerank bisa dimatikan | ✅ Ada | Kosongkan `RERANK_MODEL` |
-| CLI (`ingest`, `ask`, `list`, `delete`, `eval`, `probe-embedding`) | ❌ Tidak ada | Buat aplikasi CLI di luar package |
+| CLI (`ingest`, `ask`, `list`, `delete`, `probe-embedding`) | ✅ Ada di `app/` (`eval` belum) | `python -m app.main <command>` |
 | Jawaban bersitasi `berkas, halaman` | ⚠️ Partial | Konteks berisi file_path + page; LLM prompt harus minta sitasi |
 | Penolakan bila konteks kosong | ❌ Tidak ada | Logika di aplikasi host — cek apakah `result.context` kosong |
-| `probe-embedding` | ❌ Tidak ada | Buat CLI command yang test embedding + simpan hasil ke `docs/DECISIONS.md` |
+| `probe-embedding` | ✅ Ada di `app/commands/probe_embedding.py` | Menyimpan laporan ke `docs/DECISIONS.md` |
 | Eval otomatis (baseline A/B/C) | ❌ Tidak ada | Buat di luar package |
 | S3 dependency | ⚠️ Ada tapi opsional | Jika tidak pakai Textract, hook `s3` tidak dipanggil — bisa isi dummy |
 | Sitasi halaman untuk md | ⚠️ Partial | `page_idx=0` untuk md; gunakan heading terdekat sebagai label |
@@ -1059,8 +1062,11 @@ providers.configure(get_llm=..., get_embeddings=..., s3=_DummyS3())
 
 ### Cara Matikan Graf Neo4j
 
-Cukup **kosongkan `NEO4J_URI`** di `.env`. Package otomatis skip semua operasi Neo4j.
-Tidak ada flag eksplisit — absennya URI adalah sinyalnya.
+Cukup **kosongkan `NEO4J_URI`** di `.env`. `ingestion/rag.py` dan `retrieval/rag.py`
+membangun `NullGraphStorage` (`storage/null_graph.py`) alih-alih `Neo4JStorage`; semua
+operasi graf menjadi no-op/hasil kosong, dan `worker.py` melewati ekstraksi KG + merge.
+Tidak ada flag eksplisit — absennya URI adalah sinyalnya. (Perilaku ini ditambahkan;
+sebelumnya `Neo4JStorage.initialize()` melempar `ValueError` saat URI kosong.)
 
 ### Cara Matikan Reranking
 

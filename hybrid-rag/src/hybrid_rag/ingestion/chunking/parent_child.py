@@ -245,11 +245,12 @@ async def contextualize_children(
     rather than sharing the extraction one. The client underneath still comes
     from ``services/llm_service``, so retries and binding are the shared ones.
 
-    Always runs — there is no off switch. A child chunk without its parent's
-    context is what retrieval was failing on, so skipping this step silently
-    degrades every downstream answer. For the same reason a chunk whose context
-    still cannot be produced after the client's retries fails the whole call
-    (and with it the document) instead of falling back to its bare content.
+    Always runs unless ``ENABLE_CONTEXTUALIZE=false`` (PRD v1 mematikannya:
+    satu panggilan LLM per child). A child chunk without its parent's context
+    degrades retrieval, jadi default tetap menyala; mematikannya harus eksplisit.
+    A chunk whose context still cannot be produced after the client's retries
+    fails the whole call (and with it the document) instead of falling back to
+    its bare content.
 
     Raises:
         ContextualizationError: a child could not be contextualized; carries
@@ -257,6 +258,12 @@ async def contextualize_children(
     """
     concurrency = max_concurrent or CONTEXTUALIZE_MAX_ASYNC
     semaphore = asyncio.Semaphore(concurrency)
+
+    # PRD v1: contextualize dimatikan lewat ENABLE_CONTEXTUALIZE=false —
+    # child dipakai apa adanya, tanpa panggilan LLM per chunk.
+    if not settings.enable_contextualize:
+        logger.info("[parent-child] Contextualize dimatikan; child dipakai apa adanya")
+        return child_chunks
 
     async def _contextualize_one(child: dict[str, Any]) -> dict[str, Any]:
         parent_idx = child.get("parent_index", 0)

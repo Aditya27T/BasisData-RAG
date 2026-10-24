@@ -36,3 +36,25 @@ Catatan keputusan teknis dari hasil probe dan eksperimen.
 
 
 ---
+
+## Keputusan implementasi — 2026-10-24
+
+**Embedding: OpenRouter** (`https://openrouter.ai/api/v1`, `BAAI/bge-m3`, 1024d).
+Endpoint lama Hugging Face (`api-inference.huggingface.co`) tidak lagi resolve (DNS),
+dan router HF membalas 402 (kredit). OpenRouter lulus seluruh uji probe. Satu penyedia
+dipakai untuk ingest dan query.
+
+**Graf mati secara default.** `NEO4J_URI` kosong → `NullGraphStorage` (no-op); ekstraksi
+KG dan merge dilewati, sementara ingestion/retrieval/deletion tetap berjalan. Diuji
+end-to-end (ingest + ask) tanpa Neo4j.
+
+**Contextualize per child dimatikan** (`ENABLE_CONTEXTUALIZE=false`) sesuai PRD v1.
+
+**Parser.** md dibaca lokal; PDF/Office via LlamaParse dengan cache
+`data/parsed/<sha256>.json`. Jalur cache diuji dengan cache sintetis; panggilan
+LlamaParse live belum diuji karena API key masih placeholder.
+
+**LLM.** `openrouter/free` (router model gratis) kadang membalas stub `User Safety: safe`.
+`ask` melakukan satu retry lalu gagal dengan pesan jelas. Ekstraksi KG dengan model ini
+masih gagal (butuh model yang patuh structured output); keputusan model milik pemilik proyek.
+

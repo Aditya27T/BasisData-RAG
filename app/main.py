@@ -45,7 +45,7 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.required = True
 
     # ── probe-embedding ──
-    p_probe = sub.add_parser(
+    sub.add_parser(
         "probe-embedding",
         help="Uji penyedia embedding dan simpan hasil ke docs/DECISIONS.md",
     )
@@ -90,7 +90,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # ── list ──
-    p_list = sub.add_parser(
+    sub.add_parser(
         "list",
         help="Tampilkan semua dokumen di workspace",
     )

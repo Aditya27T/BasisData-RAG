@@ -166,28 +166,41 @@ async def extract_keywords_only(
     This method does NOT build the final RAG context or provide a final answer.
     It ONLY extracts keywords (hl_keywords, ll_keywords).
     """
-    result: KeywordsOutput | None = await keywords_chain().ainvoke(
-        {"query": text},
-        config={
-            "configurable": {
-                CACHE_KV: hashing_kv,
-                # "mix" is part of the stored cache key; keep it so existing
-                # keyword entries stay addressable.
-                CACHE_MODE: "mix",
-                CACHE_QUERYPARAM: {
-                    "mode": "mix",
-                    "top_k": param.top_k,
-                    "chunk_top_k": param.chunk_top_k,
-                    "max_entity_tokens": param.max_entity_tokens,
-                    "max_relation_tokens": param.max_relation_tokens,
-                    "enable_rerank": param.enable_rerank,
-                },
-            }
-        },
-    )
+    result: KeywordsOutput | None
+    try:
+        result = await keywords_chain().ainvoke(
+            {"query": text},
+            config={
+                "configurable": {
+                    CACHE_KV: hashing_kv,
+                    # "mix" is part of the stored cache key; keep it so existing
+                    # keyword entries stay addressable.
+                    CACHE_MODE: "mix",
+                    CACHE_QUERYPARAM: {
+                        "mode": "mix",
+                        "top_k": param.top_k,
+                        "chunk_top_k": param.chunk_top_k,
+                        "max_entity_tokens": param.max_entity_tokens,
+                        "max_relation_tokens": param.max_relation_tokens,
+                        "enable_rerank": param.enable_rerank,
+                    },
+                }
+            },
+        )
+    except Exception as exc:
+        # Model tanpa structured output yang andal (mis. router model gratis)
+        # tidak boleh mematikan retrieval: chunk search memakai query asli,
+        # jadi turunkan query menjadi low-level keyword dan lanjutkan.
+        logger.warning(
+            "Keyword extraction gagal (%s: %s); memakai query asli sebagai keyword",
+            type(exc).__name__,
+            exc,
+        )
+        return [], [text]
+
     if result is None:
         logger.warning("Keyword extraction returned no structured output")
-        return [], []
+        return [], [text]
 
     return (
         _normalize_keyword_list(result.high_level_keywords, "high_level_keywords"),

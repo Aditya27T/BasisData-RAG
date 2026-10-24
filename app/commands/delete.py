@@ -12,8 +12,6 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Optional
-
 
 PARSED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "parsed"
 
