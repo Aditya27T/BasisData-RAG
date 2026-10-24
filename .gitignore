@@ -1,0 +1,35 @@
+# Environment — JANGAN di-commit, berisi secret
+.env
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data — dokumen asli dan hasil parse bisa berisi konten sensitif
+data/originals/*
+data/parsed/*
+!data/originals/.gitkeep
+!data/parsed/.gitkeep
+
+# Eval — pertanyaan dan jawaban ground truth
+# eval/questions.yaml  # uncomment jika ingin exclude
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,53 @@
+services:
+  paradedb:
+    image: paradedb/paradedb:latest
+    container_name: cobarag_paradedb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PG 18+: mount ke parent; PG menaruh data di subdirektori versi
+      - paradedb_data:/var/lib/postgresql
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DATABASE:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  neo4j:
+    # Hanya jalan bila dijalankan dengan: docker compose --profile graph up
+    # Contoh: docker compose --profile graph up neo4j
+    profiles: ["graph"]
+    image: neo4j:5-community
+    container_name: cobarag_neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-password}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_heap_initial__size: 256m
+      NEO4J_dbms_memory_heap_max__size: 512m
+      NEO4J_dbms_memory_pagecache_size: 256m
+    ports:
+      - "7474:7474"   # HTTP browser
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    mem_limit: 1200m
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  paradedb_data:
+  neo4j_data:
+  neo4j_logs:

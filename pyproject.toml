@@ -1,0 +1,55 @@
+[project]
+name = "cobarag"
+version = "0.1.0"
+description = "RAG hybrid lokal: ParadeDB + LlamaParse + hybrid-rag"
+requires-python = ">=3.11,<3.13"
+
+dependencies = [
+    # Engine RAG — member workspace lokal (folder hybrid-rag/)
+    "hybrid-rag[ingestion]",
+    # LangChain OpenAI-compatible client (untuk LLM dan Embeddings)
+    "langchain-openai>=0.3,<1",
+    # Async HTTP (dipakai langchain-openai dan httpx)
+    "httpx>=0.27,<1",
+]
+
+[project.scripts]
+# Setelah `pip install -e .`, perintah `cobarag` tersedia di PATH
+cobarag = "app.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# Dependency lokal pakai direct reference `file:./hybrid-rag`
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+# Hanya include folder app/
+packages = ["app"]
+
+# ---------------------------------------------------------------------------
+# Tool config
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+
+# ---------------------------------------------------------------------------
+# uv workspace — folder hybrid-rag/ adalah member, sehingga dependency
+# `hybrid-rag[ingestion]` resolve ke folder lokal tanpa path relatif.
+# ---------------------------------------------------------------------------
+[tool.uv.workspace]
+members = ["hybrid-rag"]
+
+[tool.uv.sources]
+hybrid-rag = { workspace = true }
