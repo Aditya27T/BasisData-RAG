@@ -39,7 +39,7 @@ Ia adalah *engine* yang dipakai oleh aplikasi host.
 
 **Stack teknologi:**
 - Penyimpanan: ParadeDB (PostgreSQL + pgvector + pg_search BM25)
-- Graf (opsional): Neo4j
+- Graf aktif: Neo4j
 - Embedding: injeksi dari host via `providers.configure(get_embeddings=...)`
 - LLM: injeksi dari host via `providers.configure(get_llm=...)`
 - Parser bawaan: Amazon Textract (ada, tapi PRD mengganti ini dengan LlamaParse)
@@ -382,8 +382,8 @@ Instance singleton: `from hybrid_rag.config import settings`.
 | `LLM_MAX_ASYNC` | 4 | Konkurensi panggilan LLM |
 | `KEYWORD_LLM_*` | fallback ke LLM_* | LLM khusus ekstraksi keyword |
 | `EXTRACT_LLM_*` | fallback ke LLM_* | LLM khusus ekstraksi entitas |
-| `VLM_MODEL` | `mjai.kimi-k2.5` | Model VLM untuk captioning |
-| `VLM_MAX_ASYNC` | 3 | Konkurensi VLM per dokumen |
+| `VLM_MODEL` | `nvidia/nemotron-3.5-super-vl:free` | VLM OpenRouter gratis untuk captioning; mendukung input gambar dan structured output |
+| `VLM_MAX_ASYNC` | 1 | Konkurensi VLM per dokumen, dibatasi untuk rate limit model gratis |
 | `VLM_TIMEOUT` | 120.0 | Timeout per panggilan VLM (detik) |
 | `MAX_RETRIES` | 5 | Retry maksimum |
 | `CONTEXTUALIZE_MODEL` | None (→ LLM_MODEL) | Model contextualize |
@@ -398,16 +398,16 @@ Instance singleton: `from hybrid_rag.config import settings`.
 #### Embedding
 | Env var | Default | Keterangan |
 |---|---|---|
-| `EMBEDDING_BINDING_HOST` | None | Base URL embedding (wajib) |
-| `EMBEDDING_BINDING_API_KEY` | None | API key embedding (wajib) |
-| `EMBEDDING_MODEL` | `mjai.titan-embed-text-v2:0` | Model embedding |
+| `EMBEDDING_BINDING_HOST` | None | Base URL OpenAI-compatible; aplikasi memakai `http://localhost:11434/v1` |
+| `EMBEDDING_BINDING_API_KEY` | None | Wajib untuk client; isi `ollama`, server lokal mengabaikannya |
+| `EMBEDDING_MODEL` | `mjai.titan-embed-text-v2:0` | Aplikasi memakai model Ollama `bge-m3` |
 | `EMBEDDING_DIM` | 1024 | Dimensi vektor (harus cocok dengan tabel) |
 | `EMBEDDING_TOKEN_LIMIT` | 8192 | Batas token per teks |
 | `EMBEDDING_BATCH_NUM` | 1 | Ukuran batch embedding |
 | `EMBEDDING_FUNC_MAX_ASYNC` | 8 | Konkurensi embedding |
 | `EMBEDDING_TIMEOUT` | 60.0 | Timeout embedding (detik) |
 
-> **PENTING:** Untuk PRD ini, set `EMBEDDING_MODEL=BAAI/bge-m3` dan `EMBEDDING_DIM=1024`.
+> **PENTING:** Untuk PRD ini, gunakan Ollama lokal dengan `EMBEDDING_MODEL=bge-m3`, `EMBEDDING_DIM=1024`, dan konkurensi satu.
 
 #### Retrieval
 | Env var | Default | Keterangan |
@@ -473,7 +473,7 @@ Instance singleton: `from hybrid_rag.config import settings`.
 | `NEO4J_PASSWORD` | None | Password |
 | `NEO4J_DATABASE` | None | Nama database |
 
-> Untuk PRD: biarkan `NEO4J_URI` kosong agar Neo4j tidak dipakai.
+> Untuk aplikasi ini, isi `NEO4J_URI`; retrieval normal memakai graf. `QueryParam.include_graph=false` hanya dipakai baseline B.
 
 #### Pipeline
 | Env var | Default | Keterangan |
@@ -960,7 +960,7 @@ Semua tabel ada di schema `rag` (default, bisa diubah via `POSTGRES_SCHEMA`).
 
 ## 13. Variabel Environment Lengkap
 
-Contoh file `.env` minimal untuk PRD (tanpa Neo4j, tanpa Textract, dengan LlamaParse di luar package):
+Contoh file `.env` minimal untuk PRD (Neo4j aktif, tanpa Textract, dengan LlamaParse di luar package):
 
 ```env
 # LLM (wajib diisi sebelum M1)
@@ -968,12 +968,13 @@ LLM_BINDING_HOST=https://...         # base URL provider LLM
 LLM_BINDING_API_KEY=...
 LLM_MODEL=...                        # belum diputuskan (lihat PRD bagian 10.1)
 
-# Embedding (diputuskan oleh probe-embedding di M0)
-EMBEDDING_BINDING_HOST=https://...   # HuggingFace atau OpenRouter
-EMBEDDING_BINDING_API_KEY=...
-EMBEDDING_MODEL=BAAI/bge-m3
+# Embedding lokal via Ollama
+EMBEDDING_BINDING_HOST=http://localhost:11434/v1
+EMBEDDING_BINDING_API_KEY=ollama
+EMBEDDING_MODEL=bge-m3
 EMBEDDING_DIM=1024
 EMBEDDING_TOKEN_LIMIT=8192
+EMBEDDING_FUNC_MAX_ASYNC=1
 
 # PostgreSQL/ParadeDB
 POSTGRES_HOST=localhost
@@ -984,8 +985,11 @@ POSTGRES_PASSWORD=...
 POSTGRES_SCHEMA=rag
 RAG_SCHEMA_BOOTSTRAP=true            # buat tabel otomatis
 
-# Nonaktifkan Neo4j (graf mati by default)
-# NEO4J_URI=                         # biarkan kosong
+# Neo4j aktif; contoh service lokal dari docker-compose profile graph
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=password
+NEO4J_DATABASE=neo4j
 
 # Nonaktifkan reranking (v1)
 # RERANK_MODEL=                      # biarkan kosong
@@ -993,8 +997,9 @@ RAG_SCHEMA_BOOTSTRAP=true            # buat tabel otomatis
 # Nonaktifkan contextualize (v1)
 # CONTEXTUALIZE_MODEL=               # biarkan kosong
 
-# Nonaktifkan multimodal analyze (jika tidak butuh VLM)
-# VLM_MODEL=                         # opsional, kosongkan jika dokumen text-only
+# VLM gratis; host dan API key fallback ke LLM_BINDING_*
+VLM_MODEL=nvidia/nemotron-3.5-super-vl:free
+VLM_MAX_ASYNC=1
 
 # Tuning retrieval
 TOP_K=40
@@ -1019,13 +1024,13 @@ ENABLE_LLM_CACHE=true
 | `doc_id = sha256(isi file)` | ⚠️ Partial (`_generate_content_based_doc_id`) | Hitung sha256 di luar dan berikan eksplisit ke `insert_content_list(doc_id=...)` |
 | Chunking parent-child | ✅ Ada | Sudah jalan |
 | Hybrid retrieval (vektor + BM25 + RRF) | ✅ Ada | Sudah jalan |
-| Graf Neo4j sebagai opsi | ✅ Ada | Biarkan `NEO4J_URI` kosong untuk mematikan |
+| Graf Neo4j aktif | ✅ Ada | `NEO4J_URI` mengaktifkan ingest/retrieval; `QueryParam.include_graph=false` mengisolasi baseline B |
 | Rerank bisa dimatikan | ✅ Ada | Kosongkan `RERANK_MODEL` |
-| CLI (`ingest`, `ask`, `list`, `delete`, `probe-embedding`) | ✅ Ada di `app/` (`eval` belum) | `python -m app.main <command>` |
-| Jawaban bersitasi `berkas, halaman` | ⚠️ Partial | Konteks berisi file_path + page; LLM prompt harus minta sitasi |
-| Penolakan bila konteks kosong | ❌ Tidak ada | Logika di aplikasi host — cek apakah `result.context` kosong |
+| CLI (`ingest`, `ask`, `list`, `delete`, `eval`, `probe-embedding`) | ✅ Ada di `app/` | `python -m app.main <command>` |
+| Jawaban bersitasi `berkas, halaman` | ✅ Ada di `app/answer.py` dan `app/citations.py` | Verifikasi sitasi dijalankan sebelum jawaban diterima |
+| Penolakan bila konteks kosong | ✅ Ada | `answer_question()` menolak konteks kosong |
 | `probe-embedding` | ✅ Ada di `app/commands/probe_embedding.py` | Menyimpan laporan ke `docs/DECISIONS.md` |
-| Eval otomatis (baseline A/B/C) | ❌ Tidak ada | Buat di luar package |
+| Eval otomatis baseline A/B/C | ⚠️ Kerangka ada di `app/evaluation.py` | Menunggu dataset owner-authored, re-ingest graf, dan laporan live |
 | S3 dependency | ⚠️ Ada tapi opsional | Jika tidak pakai Textract, hook `s3` tidak dipanggil — bisa isi dummy |
 | Sitasi halaman untuk md | ⚠️ Partial | `page_idx=0` untuk md; gunakan heading terdekat sebagai label |
 
@@ -1035,8 +1040,8 @@ ENABLE_LLM_CACHE=true
 
 ### Prinsip Tidak Boleh Dilanggar
 
-1. **Satu penyedia embedding untuk ingest dan query.** Jika penyedia diganti, seluruh tabel vektor harus dibuat ulang.
-2. **`EMBEDDING_DIM` harus cocok** dengan model yang dipakai. `bge-m3` = 1024.
+1. **Satu runtime dan model embedding untuk ingest dan query.** Tidak ada fallback otomatis. Jika konfigurasi diganti, hapus tabel vektor lama dan ingest ulang.
+2. **`EMBEDDING_DIM` harus cocok** dengan model yang dipakai. Ollama `bge-m3` menghasilkan 1024 dimensi.
 3. **`GRAPH_FIELD_SEP = "<SEP>"` tidak boleh diubah** setelah data masuk — bisa corrupt data yang ada.
 4. **`RAG_SCHEMA_BOOTSTRAP=true`** harus di-set agar tabel dibuat. Tanpa ini, insert akan gagal.
 5. **Verifikasi path dan nama fungsi di dokumen ini ke kode** sebelum implementasi — komentar kode lebih akurat daripada analisis statis.

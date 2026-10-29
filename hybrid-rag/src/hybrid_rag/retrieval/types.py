@@ -25,6 +25,9 @@ class QueryParam:
     enable_rerank: bool = settings.rerank_by_default
     """Rerank retrieved chunks; a warning is logged if no rerank model is configured."""
 
+    include_graph: bool = True
+    """Include Neo4j entity and relationship retrieval for this query."""
+
     return_parent: bool = False
     """Kembalikan teks parent, bukan child, sebagai isi tiap chunk hasil.
 

@@ -30,11 +30,14 @@ class RagSettings(BaseSettings):
     extract_llm_binding_host: Optional[str] = Field(default=None, validation_alias="EXTRACT_LLM_BINDING_HOST")
     extract_llm_binding_api_key: Optional[str] = Field(default=None, validation_alias="EXTRACT_LLM_BINDING_API_KEY")
     extract_llm_timeout: Optional[int] = Field(default=None, validation_alias="EXTRACT_LLM_TIMEOUT")
-    vlm_model: str = Field(default="mjai.kimi-k2.5", validation_alias="VLM_MODEL")
+    vlm_model: str = Field(
+        default="nvidia/nemotron-3.5-super-vl:free",
+        validation_alias="VLM_MODEL",
+    )
     vlm_binding_host: Optional[str] = Field(default=None, validation_alias="VLM_BINDING_HOST")
     vlm_binding_api_key: Optional[str] = Field(default=None, validation_alias="VLM_BINDING_API_KEY")
     # Per dokumen: total panggilan VLM serentak = VLM_MAX_ASYNC × MAX_PARALLEL_INGESTION.
-    vlm_max_async: int = Field(default=3, validation_alias="VLM_MAX_ASYNC")
+    vlm_max_async: int = Field(default=1, validation_alias="VLM_MAX_ASYNC")
     # Detik per panggilan VLM. Panggilan yang lewat batas di-retry (MAX_RETRIES),
     # lalu menggagalkan dokumen — tanpa batas, satu panggilan macet menahannya selamanya.
     vlm_timeout: float = Field(default=120.0, validation_alias="VLM_TIMEOUT")

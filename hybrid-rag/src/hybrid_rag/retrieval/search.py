@@ -159,7 +159,7 @@ async def _perform_kg_search(
             except Exception as e:
                 logger.warning(f"Failed to batch pre-compute embeddings: {e}")
 
-    if len(ll_keywords) > 0:
+    if query_param.include_graph and len(ll_keywords) > 0:
         local_entities, local_relations = await _get_node_data(
             ll_keywords,
             knowledge_graph_inst,
@@ -167,7 +167,7 @@ async def _perform_kg_search(
             query_param,
             query_embedding=ll_embedding,
         )
-    if len(hl_keywords) > 0:
+    if query_param.include_graph and len(hl_keywords) > 0:
         global_relations, global_entities = await _get_edge_data(
             hl_keywords,
             knowledge_graph_inst,

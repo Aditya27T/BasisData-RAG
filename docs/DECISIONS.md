@@ -2,6 +2,67 @@
 
 Catatan keputusan teknis dari hasil probe dan eksperimen.
 
+## VLM gratis melalui OpenRouter — 2026-10-29
+
+**VLM:** `nvidia/nemotron-3.5-super-vl:free`. Katalog OpenRouter mencatat input
+gambar, `response_format`, dan `structured_outputs` dengan harga prompt serta
+completion nol. Probe nyata membaca teks `RAG 42` dan warna persegi panjang dari
+gambar PNG ke skema Pydantic tanpa error.
+
+VLM memakai host dan API key OpenRouter dari `LLM_BINDING_*`; tidak ada provider
+fallback. Konkurensi dibatasi satu karena model gratis memiliki rate limit dan
+ketersediaannya dapat berubah. Model berjalan di provider, sehingga tidak menambah
+beban model pada laptop RAM 8 GB.
+
+---
+
+## Keputusan embedding lokal — 2026-10-29
+
+**Embedding: Ollama lokal** (`http://localhost:11434/v1`, `bge-m3`, 1024d).
+Hugging Face membutuhkan kredit dan OpenRouter tetap merupakan layanan berbayar,
+sehingga embedding dipindahkan ke runtime lokal tanpa biaya per request. OpenRouter
+tetap dapat dipakai untuk LLM jawaban, tetapi bukan untuk embedding.
+
+Tidak ada fallback embedding otomatis. Mengganti runtime atau model mewajibkan
+penghapusan tabel vektor lama dan ingest ulang agar vektor dari penyedia berbeda
+tidak tercampur. Konkurensi embedding dibatasi satu untuk mesin RAM 8 GB.
+
+---
+
+## Kerangka evaluasi M3 — 2026-10-29
+
+CLI `cobarag eval` menjalankan baseline A (seluruh dokumen), baseline B
+(hybrid retrieval tanpa graf), dan baseline C (hybrid retrieval dengan Neo4j)
+secara serial. Satu panggilan judge per jawaban non-penolakan menilai correctness
+dan faithfulness; panggilan jawaban dan judge dihitung terpisah. Laporan JSON dan
+Markdown disimpan di `eval/reports/`.
+
+Dataset resmi tetap harus ditulis pemilik sebelum evaluasi pertama: 20-30 pertanyaan,
+minimal lima kasus penolakan, jawaban acuan, dan sumber heading atau halaman.
+Kerangka tersedia, tetapi M3/M4 belum selesai sampai `eval/questions.yaml` tersedia,
+dokumen di-ingest ulang dengan graf aktif, dan laporan A/B/C berhasil dibuat.
+Jumlah token embedding dilaporkan sebagai tidak tersedia karena engine belum
+mengekspos metrik tersebut.
+
+---
+
+## Neo4j aktif dan baseline C — 2026-10-29
+
+Neo4j dipakai untuk ekstraksi entitas/relasi saat ingest dan untuk retrieval normal.
+`NEO4J_URI` menjadi gerbang runtime. Endpoint Aura lama tidak lagi dapat di-resolve
+melalui DNS, sehingga konfigurasi aktif dan `.env.example` memakai service lokal
+dari profile Docker `graph`.
+
+`QueryParam.include_graph` memisahkan eksperimen tanpa mengubah konfigurasi global:
+baseline B memaksakan graf mati per query, baseline C memakai Neo4j, dan `ask` normal
+memakai graf. Laporan evaluasi mencatat jumlah entitas dan relasi yang dikembalikan
+serta selisih C terhadap B.
+
+Dokumen harus di-ingest ulang setelah graf diaktifkan. Tanpa re-ingest, Neo4j tidak
+memiliki node dan relasi untuk baseline C.
+
+---
+
 ## probe-embedding — 2026-10-24 15:00
 
 **Status:** LULUS ✅  
@@ -39,10 +100,10 @@ Catatan keputusan teknis dari hasil probe dan eksperimen.
 
 ## Keputusan implementasi — 2026-10-24
 
-**Embedding: OpenRouter** (`https://openrouter.ai/api/v1`, `BAAI/bge-m3`, 1024d).
+**Embedding: OpenRouter (digantikan 2026-10-29).**
 Endpoint lama Hugging Face (`api-inference.huggingface.co`) tidak lagi resolve (DNS),
-dan router HF membalas 402 (kredit). OpenRouter lulus seluruh uji probe. Satu penyedia
-dipakai untuk ingest dan query.
+dan router HF membalas 402 (kredit). OpenRouter lulus probe saat itu, sebelum keputusan
+beralih ke Ollama lokal. Satu runtime embedding dipakai untuk ingest dan query.
 
 **Graf mati secara default.** `NEO4J_URI` kosong → `NullGraphStorage` (no-op); ekstraksi
 KG dan merge dilewati, sementara ingestion/retrieval/deletion tetap berjalan. Diuji

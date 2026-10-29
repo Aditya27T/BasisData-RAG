@@ -68,27 +68,32 @@ async def kg_query(
     if not query:
         return None
 
-    hl_keywords, ll_keywords = await extract_keywords_only(
-        query, query_param, global_config, hashing_kv
-    )
+    if query_param.include_graph:
+        hl_keywords, ll_keywords = await extract_keywords_only(
+            query, query_param, global_config, hashing_kv
+        )
+    else:
+        hl_keywords, ll_keywords = [], []
 
     logger.debug(f"High-level keywords: {hl_keywords}")
     logger.debug(f"Low-level  keywords: {ll_keywords}")
 
-    # Handle empty keywords
-    if ll_keywords == [] and hl_keywords:
-        # Query tematik tanpa entitas konkret (mis. "domain proses bisnis aplikasi data") sah
-        # menghasilkan LL kosong; tanpa fallback ini pencarian entitas dilewati sama sekali.
-        logger.info("low_level_keywords kosong; memakai high_level_keywords untuk pencarian entitas")
-        ll_keywords = list(hl_keywords)
-    if hl_keywords == []:
-        logger.warning("high_level_keywords is empty")
-    if hl_keywords == [] and ll_keywords == []:
-        if len(query) < 50:
-            logger.warning(f"Forced low_level_keywords to origin query: {query}")
-            ll_keywords = [query]
-        else:
-            return None
+    # Graphless retrieval only needs the original query for chunk vector/BM25 search.
+    if query_param.include_graph:
+        if ll_keywords == [] and hl_keywords:
+            # Query tematik tanpa entitas konkret tetap perlu pencarian entitas.
+            logger.info(
+                "low_level_keywords kosong; memakai high_level_keywords untuk pencarian entitas"
+            )
+            ll_keywords = list(hl_keywords)
+        if hl_keywords == []:
+            logger.warning("high_level_keywords is empty")
+        if hl_keywords == [] and ll_keywords == []:
+            if len(query) < 50:
+                logger.warning(f"Forced low_level_keywords to origin query: {query}")
+                ll_keywords = [query]
+            else:
+                return None
 
     ll_keywords_str = ", ".join(ll_keywords) if ll_keywords else ""
     hl_keywords_str = ", ".join(hl_keywords) if hl_keywords else ""
@@ -183,6 +188,7 @@ async def extract_keywords_only(
                         "max_entity_tokens": param.max_entity_tokens,
                         "max_relation_tokens": param.max_relation_tokens,
                         "enable_rerank": param.enable_rerank,
+                        "include_graph": param.include_graph,
                     },
                 }
             },
@@ -302,6 +308,7 @@ async def _build_query_context(
         "high_level": hl_keywords_list,
         "low_level": ll_keywords_list,
     }
+    raw_data["metadata"]["include_graph"] = query_param.include_graph
     raw_data["metadata"]["processing_info"] = {
         "total_entities_found": len(search_result.get("final_entities", [])),
         "total_relations_found": len(search_result.get("final_relations", [])),

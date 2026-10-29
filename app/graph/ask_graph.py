@@ -35,6 +35,8 @@ async def _retrieve_node(state: AskState) -> dict:
         "sources": retrieved.sources,
         "sources_block": retrieved.sources_block,
         "image_paths": retrieved.image_paths,
+        "entities": retrieved.entities,
+        "relationships": retrieved.relationships,
     }
 
 
@@ -141,4 +143,6 @@ async def ask_graph(
         attempts=int(final.get("attempts", 0)),
         llm_calls=int(final.get("llm_calls", 0)),
         image_paths=list(final.get("image_paths") or []),
+        entities=list(final.get("entities") or []),
+        relationships=list(final.get("relationships") or []),
     )

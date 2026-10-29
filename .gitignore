@@ -23,8 +23,9 @@ data/parsed/*
 !data/originals/.gitkeep
 !data/parsed/.gitkeep
 
-# Eval — pertanyaan dan jawaban ground truth
-# eval/questions.yaml  # uncomment jika ingin exclude
+# Eval berisi ground truth dan konteks jawaban yang mungkin sensitif
+eval/questions.yaml
+eval/reports/
 
 # macOS
 .DS_Store

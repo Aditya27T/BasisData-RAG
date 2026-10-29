@@ -65,11 +65,11 @@ def _get_embeddings(
     base_url: str | None = None,
     api_key: str | None = None,
 ) -> Any:
-    """Buat LangChain Embeddings yang kompatibel OpenAI.
+    """Buat LangChain Embeddings melalui endpoint OpenAI-compatible.
 
-    Mendukung dua penyedia:
-    - HuggingFace Inference API: base_url berakhiran nama model
-    - OpenRouter atau endpoint lain: base_url adalah base API
+    Default aplikasi adalah Ollama lokal di ``http://localhost:11434/v1``.
+    Provider API tidak dijadikan fallback otomatis karena ingest dan query harus
+    selalu memakai ruang vektor yang sama.
     """
     try:
         from langchain_openai import OpenAIEmbeddings
@@ -83,8 +83,8 @@ def _get_embeddings(
         model=model_id,
         base_url=base_url,
         api_key=api_key,
-        # HuggingFace Inference API memakai endpoint per model,
-        # OpenAI-compat endpoint biasanya check_embedding_ctx_length perlu False
+        # Ollama menyediakan /v1/embeddings; pemeriksaan panjang konteks milik
+        # OpenAI client tidak diperlukan untuk model lokal.
         check_embedding_ctx_length=False,
     )
 

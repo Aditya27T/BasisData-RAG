@@ -4,7 +4,7 @@ Dua implementasi dengan kontrak sama (`app.answer.Answer`):
 - `answer_question()`: fungsi biasa
 - `ask_graph()`: dibungkus LangGraph (PRD v0.3 F14)
 
-PRD F6: retrieval hybrid tanpa Neo4j
+PRD F6/F11: retrieval hybrid; Neo4j dipakai bila NEO4J_URI terkonfigurasi
 PRD F7: jawaban bersitasi berkas, halaman
 PRD F8: penolakan bila konteks kosong atau tidak relevan
 """

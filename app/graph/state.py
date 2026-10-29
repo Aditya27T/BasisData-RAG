@@ -18,6 +18,8 @@ class AskState(TypedDict, total=False):
     chunks: list[dict]
     sources: list[dict]
     sources_block: str
+    entities: list[dict]
+    relationships: list[dict]
     image_paths: list[str]
 
     # generate / verify

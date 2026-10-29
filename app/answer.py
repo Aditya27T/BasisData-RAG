@@ -51,6 +51,8 @@ class Retrieved:
     chunks: list[dict] = field(default_factory=list)
     sources: list[dict] = field(default_factory=list)
     sources_block: str = ""
+    entities: list[dict] = field(default_factory=list)
+    relationships: list[dict] = field(default_factory=list)
     image_paths: list[str] = field(default_factory=list)
 
 
@@ -66,6 +68,8 @@ class Answer:
     chunks: list[dict] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
     attempts: int = 0
+    entities: list[dict] = field(default_factory=list)
+    relationships: list[dict] = field(default_factory=list)
     llm_calls: int = 0
     image_paths: list[str] = field(default_factory=list)
 
@@ -104,9 +108,10 @@ async def retrieve(
     question: str,
     workspace: str | None = None,
     return_parent: bool = False,
+    include_graph: bool = True,
 ) -> Retrieved:
     """Ambil konteks hybrid (vektor + BM25) dan label sumber yang bisa disitasi."""
-    from hybrid_rag.retrieval import retrieve_context
+    from hybrid_rag.retrieval import QueryParam, retrieve_context
 
     from app.citations import build_sources, chunk_ids, render_sources
 
@@ -114,11 +119,13 @@ async def retrieve(
     result = await retrieve_context(
         question,
         workspace=ws,
+        param=QueryParam(include_graph=include_graph),
         return_parent=return_parent,
         include_raw_data=True,
     )
 
     chunks = list((result.raw_data or {}).get("data", {}).get("chunks") or [])
+    data = (result.raw_data or {}).get("data", {})
     pages_by_chunk = await _load_page_sidecars(chunk_ids(chunks), ws)
     sources = build_sources(chunks, pages_by_chunk)
 
@@ -128,6 +135,8 @@ async def retrieve(
         sources=sources,
         sources_block=render_sources(sources),
         image_paths=list(result.image_paths or []),
+        entities=list(data.get("entities") or []),
+        relationships=list(data.get("relationships") or []),
     )
 
 
@@ -253,6 +262,8 @@ def build_refusal(
     attempts: int = 0,
     llm_calls: int = 0,
     image_paths: list[str] | None = None,
+    entities: list[dict] | None = None,
+    relationships: list[dict] | None = None,
 ) -> Answer:
     """Jawaban penolakan dengan metadata yang sama seperti jawaban biasa."""
     return Answer(
@@ -265,6 +276,8 @@ def build_refusal(
         problems=list(problems or []),
         attempts=attempts,
         llm_calls=llm_calls,
+        entities=list(entities or []),
+        relationships=list(relationships or []),
         image_paths=list(image_paths or []),
     )
 
@@ -295,6 +308,7 @@ async def answer_question(
     return_parent: bool = False,
     max_retries: int | None = None,
     min_score: float | None = None,
+    include_graph: bool = True,
 ) -> Answer:
     """Implementasi fungsi biasa (pembanding paritas untuk `ask_graph`)."""
     if max_retries is None:
@@ -302,7 +316,12 @@ async def answer_question(
     if min_score is None:
         min_score = min_score_default()
 
-    retrieved = await retrieve(question, workspace=workspace, return_parent=return_parent)
+    retrieved = await retrieve(
+        question,
+        workspace=workspace,
+        return_parent=return_parent,
+        include_graph=include_graph,
+    )
 
     if not is_context_sufficient(retrieved.chunks, min_score):
         return build_refusal(
@@ -311,6 +330,8 @@ async def answer_question(
             sources_block=retrieved.sources_block,
             chunks=retrieved.chunks,
             image_paths=retrieved.image_paths,
+            entities=retrieved.entities,
+            relationships=retrieved.relationships,
         )
 
     problems: list[str] = []
@@ -330,6 +351,8 @@ async def answer_question(
                 attempts=attempts,
                 llm_calls=attempts,
                 image_paths=retrieved.image_paths,
+                entities=retrieved.entities,
+                relationships=retrieved.relationships,
             )
 
     return build_refusal(
@@ -341,4 +364,6 @@ async def answer_question(
         attempts=attempts,
         llm_calls=attempts,
         image_paths=retrieved.image_paths,
+        entities=retrieved.entities,
+        relationships=retrieved.relationships,
     )
