@@ -2,6 +2,42 @@
 
 Catatan keputusan teknis dari hasil probe dan eksperimen.
 
+## probe-embedding — 2026-11-10 09:40
+
+**Status:** LULUS ✅\
+**Provider:** `http://localhost:11434/v1`\
+**Model:** `bge-m3`\
+**Dimensi:** 1024 (diharap 1024)\
+**Latensi rata-rata:** 40.0 ms\
+
+**Detail tes:**
+
+- ✅ Dimensi: dapat 1024, harap 1024
+- ✅ Latensi rata-rata: 40.0 ms
+- ✅ Similarity checks:
+  - ✅ `Sistem RAG menggabungkan penca…` vs `RAG hybrid menggunakan vektor …` → sim=0.741 > sim=0.258 (ok)
+  - ✅ `Sistem RAG menggabungkan penca…` vs `RAG hybrid menggunakan vektor …` → sim=0.741 > sim=0.385 (ok)
+
+---
+
+## probe-embedding — 2026-11-09 22:55
+
+**Status:** LULUS ✅\
+**Provider:** `http://localhost:11434/v1`\
+**Model:** `bge-m3`\
+**Dimensi:** 1024 (diharap 1024)\
+**Latensi rata-rata:** 156.7 ms\
+
+**Detail tes:**
+
+- ✅ Dimensi: dapat 1024, harap 1024
+- ✅ Latensi rata-rata: 156.7 ms
+- ✅ Similarity checks:
+  - ✅ `Sistem RAG menggabungkan penca…` vs `RAG hybrid menggunakan vektor …` → sim=0.741 > sim=0.258 (ok)
+  - ✅ `Sistem RAG menggabungkan penca…` vs `RAG hybrid menggunakan vektor …` → sim=0.741 > sim=0.385 (ok)
+
+---
+
 ## VLM gratis melalui OpenRouter — 2026-10-29
 
 **VLM:** `nvidia/nemotron-3.5-super-vl:free`. Katalog OpenRouter mencatat input
@@ -165,3 +201,25 @@ dokumen lama lalu ingest ulang, tidak memanggil LlamaParse lagi (PRD prinsip 4).
 **Bug yang ditemukan dan diperbaiki:** pipeline memperlakukan doc_id yang sudah ada sebagai
 duplikat dan menulis baris `dup-…` berstatus FAILED saat re-ingest. `ingest --force` kini
 memanggil `delete_document(..., delete_llm_cache=False)` lebih dulu.
+
+## 9router structured output — 2026-11-10
+
+Structured-output chains use LangChain `function_calling` because 9router's JSON-schema response returned an object in `message.content`, which the OpenAI client could not parse as JSON text. Modul 1 DOCX ingested successfully (10 content blocks) after this change. Keyword extraction still returns no structured output on the `Rag` alias and falls back to the original query; retrieval and cited answer generation were verified.
+
+## Local reranker — 2026-11-10
+
+The host injects a FastEmbed cross-encoder for reranking when `RERANK_MODEL` is set. The local `.env` uses `jinaai/jina-reranker-v2-base-multilingual` with `RERANK_BY_DEFAULT=true`; `.env.example` leaves it disabled to avoid the first-use model download. This model is multilingual and licensed CC-BY-NC-4.0, so it is for non-commercial use. Provider smoke test ranked the relevant Indonesian passage above an unrelated passage. Retrieval found Modul 1 in the CLI test, but the `Rag` answer omitted a citation and was correctly rejected.
+
+## Local web UI and process streams — 2026-11-10
+
+FastAPI serves ingest, document status, chat, and graph routes; Swagger UI is at `/docs`. The Svelte client separates API transport (`webui/src/lib/api`), state/controllers (`webui/src/lib/state`), UI components (`webui/src/lib/components`), and view composition (`webui/src/lib/views`). `make webui` runs Uvicorn and Vite on loopback ports 8000 and 5173.
+
+Server-sent events expose actual pipeline events for ingest, retrieve/generate/verify stages for chat, and Neo4j read stages for graph. The UI does not show synthetic percentages or token output that the current answer function does not stream. The document-first layout follows the user's request: ingest and chat are the primary work; graph is an exploration view.
+
+Chat responses render a small inline graph from `Answer.entities` and `Answer.relationships` through `KnowledgeGraphInline.svelte`; the API and chat data remain Svelte-native rather than importing the React-only CopilotKit example. `answer_question` removes model `<think>` blocks before citation validation so reasoning markup is never sent to the UI.
+
+Reading this as: a local RAG workspace for database-course documents, in a calm document-first utility style, dial ENERGY 1 / RHYTHM 2 / MOTION 1. Neutral surfaces keep course text legible; green marks primary actions and graph nodes. The system UI typeface avoids external font downloads while keeping long course text familiar; short transitions give button actions feedback and respect reduced-motion settings.
+
+## Gemini VLM — 2026-11-10
+
+The VLM and knowledge-graph extractor use `google-genai` 2.x Interactions with `gemini-3.5-flash-lite` and `VLM_TIMEOUT=300` / `EXTRACT_LLM_TIMEOUT=300`; LLM chat remains on 9router. Both Gemini paths use `VLM_BINDING_API_KEY`, and requests use `store=False`. The adapter sends image data URIs for VLM analysis and requests JSON Schema output; KG extraction also sends parsed document text to Google and uses structured JSON. A temporary PNG passed through `analysis_chain("image_analysis")` and returned `entity_type=image` with a structured description. The ingestion pipeline does not handle audio.

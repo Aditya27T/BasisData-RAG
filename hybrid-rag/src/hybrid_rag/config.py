@@ -77,8 +77,6 @@ class RagSettings(BaseSettings):
     hybrid_search_w_semantic: float = Field(default=1.2, validation_alias="HYBRID_SEARCH_W_SEMANTIC")
     hybrid_search_w_keyword: float = Field(default=0.8, validation_alias="HYBRID_SEARCH_W_KEYWORD")
     rerank_model: Optional[str] = Field(default=None, validation_alias="RERANK_MODEL")
-    rerank_binding_host: Optional[str] = Field(default=None, validation_alias="RERANK_BINDING_HOST")
-    rerank_binding_api_key: Optional[str] = Field(default=None, validation_alias="RERANK_BINDING_API_KEY")
     rerank_max_async: int = Field(default=4, validation_alias="RERANK_MAX_ASYNC")
     rerank_timeout: int = Field(default=30, validation_alias="RERANK_TIMEOUT")
     min_rerank_score: float = Field(default=0.0, validation_alias="MIN_RERANK_SCORE")
