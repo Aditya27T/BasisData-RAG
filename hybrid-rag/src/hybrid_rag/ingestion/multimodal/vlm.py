@@ -53,7 +53,7 @@ def _vlm() -> Runnable:
         base_url=settings.resolved_vlm_binding_host,
         api_key=settings.resolved_vlm_binding_api_key,
         timeout=settings.vlm_timeout,
-    ).with_structured_output(VisionAnalysis)
+    ).with_structured_output(VisionAnalysis, method="function_calling")
 
 
 @cache

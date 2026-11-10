@@ -32,7 +32,7 @@ def keywords_chain() -> Runnable:
         base_url=settings.resolved_keyword_host,
         api_key=settings.resolved_keyword_api_key,
         timeout=settings.keyword_llm_timeout,
-    ).with_structured_output(KeywordsOutput)
+    ).with_structured_output(KeywordsOutput, method="function_calling")
     return cached_chain(
         load_chat_prompt_template(KEYWORDS_PROMPT_PATH, "keywords_extraction"),
         llm,
