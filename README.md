@@ -38,6 +38,8 @@ Aplikasi RAG lokal untuk mengingest materi kuliah dan bertanya dengan sitasi. Ba
 
    Compose menjalankan ParadeDB pada port `5432`, Neo4j Browser pada `7474`, dan Bolt pada `7687`. Data database tersimpan di named volumes Compose.
 
+Jika port `7474` atau `7687` sudah dipakai Neo4j lain, jangan jalankan profil `graph` lagi. Jalankan `docker compose up -d` untuk ParadeDB saja dan pastikan `NEO4J_URI` menunjuk ke Neo4j yang sudah aktif.
+
 ## Ingest dan tanya lewat CLI
 
 Taruh dokumen di `data/originals/`. CLI mengingest semua file di sana, atau satu file yang diberikan:
