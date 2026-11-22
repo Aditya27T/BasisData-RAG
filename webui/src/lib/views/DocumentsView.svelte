@@ -23,6 +23,7 @@
       pending: "Menunggu",
       failed: "Gagal",
       queued: "Menunggu antrean",
+      cancelled: "Dibatalkan",
     };
     return labels[String(status || "").toLowerCase()] || status || "Tidak diketahui";
   }
@@ -98,6 +99,9 @@
         <input type="checkbox" bind:checked={forceReingest} />
         <span>Proses ulang jika file sudah pernah di-ingest</span>
       </label>
+      {#if $controller.uploadBusy}
+        <button class="button secondary" type="button" onclick={() => controller.cancelUpload()}>Batalkan</button>
+      {/if}
       <button class="button primary upload-button" type="submit" disabled={!selectedFile || $controller.uploadBusy}>
         {$controller.uploadBusy ? "Sedang diproses…" : "Mulai ingest"}
       </button>

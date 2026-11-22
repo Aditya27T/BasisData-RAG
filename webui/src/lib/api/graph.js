@@ -1,9 +1,9 @@
 import { consumeEventStream } from "./http.js";
 
-export function streamGraph(workspace, limit, onEvent) {
+export function streamGraph(workspace, limit, onEvent, settings = {}) {
   const params = new URLSearchParams({
     workspace: (workspace || "docs").trim() || "docs",
     limit: String(limit),
   });
-  return consumeEventStream(`/api/graph/stream?${params}`, {}, onEvent);
+  return consumeEventStream(`/api/graph/stream?${params}`, {}, onEvent, settings);
 }

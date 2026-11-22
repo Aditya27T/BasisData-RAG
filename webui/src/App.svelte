@@ -37,7 +37,20 @@
     applyTheme();
   }
 
+  function cancelStreams() {
+    chatController.cancel();
+    graphController.cancel();
+    documentsController.cancelUpload();
+  }
+
+  function resetControllers() {
+    chatController.reset();
+    graphController.reset();
+    documentsController.reset();
+  }
+
   async function navigate(view) {
+    cancelStreams();
     activeView = view;
     if (view === "documents") await documentsController.load(workspace);
     if (view === "graph") await graphController.load(workspace);
@@ -45,6 +58,7 @@
 
   async function loadWorkspace(event) {
     event.preventDefault();
+    resetControllers();
     if (activeView === "documents") await documentsController.load(workspace);
     if (activeView === "graph") await graphController.load(workspace);
   }
