@@ -56,7 +56,7 @@ def _extract_llm() -> Runnable:
         base_url=settings.resolved_extract_host,
         api_key=settings.resolved_extract_api_key,
         timeout=settings.extract_llm_timeout,
-    ).with_structured_output(EntityExtractionOutput)
+    ).with_structured_output(EntityExtractionOutput, method="function_calling")
 
 class KGChains(NamedTuple):
     """One domain's extraction contract, built and cached as a unit."""

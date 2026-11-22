@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from typing import Callable
 
 REFUSAL = "Informasi tersebut tidak ditemukan di dokumen."
 
@@ -41,6 +42,7 @@ Konteks dokumen:
 _DEGENERATE_RE = re.compile(r"^\s*(user\s+safety|safety)\s*:", re.IGNORECASE)
 _CITATION_RE = re.compile(r"\[([^\[\]]+)\]")
 _PAGE_RE = re.compile(r"hal\.?\s*(\d+)(?:\s*[–-]\s*(\d+))?", re.IGNORECASE)
+_THINK_RE = re.compile(r"<think\b[^>]*>.*?</think\s*>", re.IGNORECASE | re.DOTALL)
 
 
 @dataclass
@@ -178,7 +180,8 @@ async def generate_answer(question: str, context: str, sources_block: str) -> st
         HumanMessage(content=question),
     ]
     response = await llm.ainvoke(messages)
-    return response.content if isinstance(response.content, str) else str(response.content)
+    content = response.content if isinstance(response.content, str) else str(response.content)
+    return _THINK_RE.sub("", content).strip()
 
 
 def citations_in(text: str) -> list[str]:
@@ -309,22 +312,35 @@ async def answer_question(
     max_retries: int | None = None,
     min_score: float | None = None,
     include_graph: bool = True,
+    progress: Callable[[dict[str, object]], None] | None = None,
 ) -> Answer:
     """Implementasi fungsi biasa (pembanding paritas untuk `ask_graph`)."""
+    def report(stage: str, message: str, **details: object) -> None:
+        if progress is not None:
+            progress({"stage": stage, "message": message, **details})
+
     if max_retries is None:
         max_retries = max_retries_default()
     if min_score is None:
         min_score = min_score_default()
 
+    report("retrieving", "Mencari konteks di vector, BM25, dan graph.")
     retrieved = await retrieve(
         question,
         workspace=workspace,
         return_parent=return_parent,
         include_graph=include_graph,
     )
+    report(
+        "retrieved",
+        "Pencarian selesai.",
+        chunks=len(retrieved.chunks),
+        sources=len(retrieved.sources),
+    )
 
     if not is_context_sufficient(retrieved.chunks, min_score):
-        return build_refusal(
+        report("refused", "Konteks tidak cukup untuk menjawab.")
+        result = build_refusal(
             question,
             sources=retrieved.sources,
             sources_block=retrieved.sources_block,
@@ -333,15 +349,19 @@ async def answer_question(
             entities=retrieved.entities,
             relationships=retrieved.relationships,
         )
+        report("complete", "Pertanyaan selesai.")
+        return result
 
     problems: list[str] = []
     attempts = 0
-    for _ in range(max_retries + 1):
+    for attempt in range(max_retries + 1):
+        report("generating", "Model sedang menyusun jawaban.", attempt=attempt + 1)
         answer = await generate_answer(question, retrieved.context, retrieved.sources_block)
         attempts += 1
+        report("verifying", "Memeriksa sitasi jawaban.", attempt=attempts)
         problems = verify_citations(answer, retrieved.sources)
         if not problems:
-            return Answer(
+            result = Answer(
                 question=question,
                 text=answer.strip(),
                 refused=is_refusal(answer),
@@ -354,8 +374,11 @@ async def answer_question(
                 entities=retrieved.entities,
                 relationships=retrieved.relationships,
             )
+            report("complete", "Jawaban dan sitasi terverifikasi.", attempts=attempts)
+            return result
 
-    return build_refusal(
+    report("refused", "Sitasi jawaban tidak lolos verifikasi.", problems=problems)
+    result = build_refusal(
         question,
         sources=retrieved.sources,
         sources_block=retrieved.sources_block,
@@ -367,3 +390,5 @@ async def answer_question(
         entities=retrieved.entities,
         relationships=retrieved.relationships,
     )
+    report("complete", "Pertanyaan selesai dengan penolakan aman.", attempts=attempts)
+    return result

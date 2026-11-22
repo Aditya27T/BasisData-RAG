@@ -34,3 +34,7 @@ eval/reports/
 .vscode/
 .idea/
 *.swp
+
+# Svelte/Vite build output
+node_modules/
+webui/dist/

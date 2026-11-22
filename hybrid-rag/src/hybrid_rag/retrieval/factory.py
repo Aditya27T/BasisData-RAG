@@ -28,7 +28,7 @@ async def build_rag(workspace: str) -> RetrievalRAG:
         embedding_func=build_embedding_func(),
         # None disables reranking entirely.
         rerank_model_func=(
-            providers.rerank_func() if settings.rerank_model and settings.rerank_binding_host else None
+            providers.rerank_func() if settings.rerank_model else None
         ),
     )
     await rag.initialize_storages()
