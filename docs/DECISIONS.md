@@ -2,6 +2,19 @@
 
 Catatan keputusan teknis dari hasil probe dan eksperimen.
 
+## Ambang perbandingan C vs B — 2026-11-22
+
+Sebelum laporan A/B/C pertama dijalankan, graf hanya dinyatakan berguna bila C
+mengungguli B minimal **5 poin persentase** pada `answer_accuracy` untuk kasus
+bertag `cross_document`, dan tidak menurunkan `citation_accuracy` maupun
+`refusal_accuracy`. Ambang ini ditetapkan lebih dulu agar interpretasi laporan
+tidak dibuat setelah melihat hasil.
+
+Keputusan ini menjadi bagian dari definisi selesai M4; jika ambang tidak tercapai,
+graf tetap diimplementasikan tetapi tidak diklaim terbukti memberi manfaat.
+
+---
+
 ## probe-embedding — 2026-11-10 09:40
 
 **Status:** LULUS ✅\
@@ -77,8 +90,8 @@ Dataset resmi tetap harus ditulis pemilik sebelum evaluasi pertama: 20-30 pertan
 minimal lima kasus penolakan, jawaban acuan, dan sumber heading atau halaman.
 Kerangka tersedia, tetapi M3/M4 belum selesai sampai `eval/questions.yaml` tersedia,
 dokumen di-ingest ulang dengan graf aktif, dan laporan A/B/C berhasil dibuat.
-Jumlah token embedding dilaporkan sebagai tidak tersedia karena engine belum
-mengekspos metrik tersebut.
+Jumlah token embedding diambil dari `usage.prompt_tokens` respons embeddings
+Ollama; bila penyedia tidak mengembalikan `usage`, dilaporkan `null`, bukan estimasi.
 
 ---
 
