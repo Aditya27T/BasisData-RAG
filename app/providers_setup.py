@@ -24,6 +24,8 @@ from typing import Any, Callable
 from hybrid_rag import providers
 from hybrid_rag.config import settings
 
+from app.embedding_usage import note_request, record_usage
+
 _progress_event_sink: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar(
     "cobarag_progress_event_sink", default=None
 )
@@ -173,6 +175,35 @@ def _get_llm(
 # Embedding factory
 # ---------------------------------------------------------------------------
 
+
+def _usage_field(value: Any, key: str) -> Any:
+    if isinstance(value, dict):
+        return value.get(key)
+    return getattr(value, key, None)
+
+
+class _UsageCapturingEmbeddingsResource:
+    def __init__(self, delegate: Any) -> None:
+        self._delegate = delegate
+
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        note_request()
+        response = await self._delegate.create(*args, **kwargs)
+        try:
+            usage = _usage_field(response, "usage")
+            if usage is not None:
+                record_usage(
+                    _usage_field(usage, "prompt_tokens"),
+                    _usage_field(usage, "total_tokens"),
+                )
+        except Exception:
+            pass
+        return response
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._delegate, name)
+
+
 def _get_embeddings(
     model_id: str,
     base_url: str | None = None,
@@ -192,7 +223,7 @@ def _get_embeddings(
             "Jalankan: pip install langchain-openai"
         ) from e
 
-    return OpenAIEmbeddings(
+    embeddings = OpenAIEmbeddings(
         model=model_id,
         base_url=base_url,
         api_key=api_key,
@@ -200,6 +231,8 @@ def _get_embeddings(
         # OpenAI client tidak diperlukan untuk model lokal.
         check_embedding_ctx_length=False,
     )
+    embeddings.async_client = _UsageCapturingEmbeddingsResource(embeddings.async_client)
+    return embeddings
 
 
 @cache

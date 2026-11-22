@@ -22,6 +22,12 @@ from app.answer import (
     verify_citations,
 )
 from app.citations import headings_in, render_sources
+from app.embedding_usage import (
+    SOURCE_PROVIDER_USAGE,
+    start_capture,
+    take_capture,
+    to_report_fields,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_QUESTIONS_PATH = PROJECT_ROOT / "eval" / "questions.yaml"
@@ -112,6 +118,9 @@ class CaseResult:
     graph_relationships: int = 0
     answer_llm_calls: int = 0
     judge_llm_calls: int = 0
+    embedding_tokens: int | None = None
+    embedding_requests: int = 0
+    embedding_tokens_source: str | None = None
     elapsed_ms: float = 0.0
     error: str | None = None
 
@@ -512,12 +521,20 @@ async def evaluate(
                 else:
                     from app.answer import answer_question
 
-                    answer = await answer_question(
-                        case.question,
-                        workspace=workspace,
-                        max_retries=max_retries,
-                        include_graph=baseline == "C",
-                    )
+                    start_capture()
+                    try:
+                        answer = await answer_question(
+                            case.question,
+                            workspace=workspace,
+                            max_retries=max_retries,
+                            include_graph=baseline == "C",
+                        )
+                    finally:
+                        (
+                            result.embedding_tokens,
+                            result.embedding_requests,
+                            result.embedding_tokens_source,
+                        ) = to_report_fields(take_capture())
                     judge_context = _answer_context(answer)
 
                 result.answer = answer.text
@@ -599,8 +616,21 @@ def _build_report(
             "judge_enabled": use_judge,
             "document_count": corpus.document_count if corpus else None,
             "parsed_pages": corpus.parsed_pages if corpus else None,
-            "embedding_tokens": None,
-            "embedding_tokens_note": "Engine belum mengekspos jumlah token embedding per query.",
+            "embedding_tokens": _sum_embedding_tokens(results),
+            "embedding_tokens_note": (
+                "Jumlah token berasal dari `usage.prompt_tokens` yang dikembalikan penyedia "
+                "embedding (Ollama `/v1/embeddings`) pada baseline B dan C, bukan estimasi. "
+                "Nilai `null` berarti baseline tidak memanggil embedding atau penyedia "
+                "tidak mengembalikan `usage`."
+            ),
+            "embedding_tokens_source": (
+                SOURCE_PROVIDER_USAGE
+                if any(
+                    result.embedding_tokens_source == SOURCE_PROVIDER_USAGE
+                    for result in results
+                )
+                else None
+            ),
         },
         "summaries": summaries,
         "comparison": comparison,
@@ -620,6 +650,8 @@ def _summarize(results: list[CaseResult]) -> dict[str, Any]:
         "faithfulness": _ratio(result.faithful for result in faithful),
         "answer_llm_calls": sum(result.answer_llm_calls for result in results),
         "judge_llm_calls": sum(result.judge_llm_calls for result in results),
+        "embedding_tokens": _sum_embedding_tokens(results),
+        "embedding_requests": sum(result.embedding_requests for result in results),
         "graph_entities": sum(result.graph_entities for result in results),
         "graph_relationships": sum(result.graph_relationships for result in results),
         "average_latency_ms": round(
@@ -635,6 +667,15 @@ def _ratio(values: Any) -> float | None:
     return round(sum(bool(value) for value in items) / len(items), 4) if items else None
 
 
+def _sum_embedding_tokens(results: list[CaseResult]) -> int | None:
+    values = [
+        result.embedding_tokens
+        for result in results
+        if result.embedding_tokens is not None
+    ]
+    return sum(values) if values else None
+
+
 def _render_markdown(report: dict[str, Any]) -> str:
     lines = [
         "# Laporan evaluasi M3/M4",
@@ -643,21 +684,25 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"Jumlah pertanyaan: {report['dataset']['questions']}",
         f"Kasus penolakan: {report['dataset']['refusal_questions']}",
         f"LLM judge: {'aktif' if report['run']['judge_enabled'] else 'nonaktif'}",
+        f"Token embedding (aktual): "
+        f"{report['run']['embedding_tokens'] if report['run']['embedding_tokens'] is not None else 'tidak tersedia'}",
         "",
         "## Ringkasan",
         "",
         "| Baseline | Jawaban benar | Sitasi benar | Penolakan benar | Faithfulness | "
-        "Entitas | Relasi | Error | Panggilan LLM |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "Entitas | Relasi | Error | Panggilan LLM | Token embedding |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for baseline, summary in report["summaries"].items():
         total_calls = summary["answer_llm_calls"] + summary["judge_llm_calls"]
+        embedding_tokens = summary["embedding_tokens"]
         lines.append(
             f"| {baseline} | {_percent(summary['answer_accuracy'])} | "
             f"{_percent(summary['citation_accuracy'])} | "
             f"{_percent(summary['refusal_accuracy'])} | "
             f"{_percent(summary['faithfulness'])} | {summary['graph_entities']} | "
-            f"{summary['graph_relationships']} | {summary['errors']} | {total_calls} |"
+            f"{summary['graph_relationships']} | {summary['errors']} | {total_calls} | "
+            f"{embedding_tokens if embedding_tokens is not None else 'n/a'} |"
         )
 
     if report["comparison"]:
