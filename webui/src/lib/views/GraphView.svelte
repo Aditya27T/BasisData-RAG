@@ -1,9 +1,16 @@
 <script>
   export let controller;
   export let workspace = "docs";
-  $: selectedNode = $controller.nodes.find((node) => node.id === $controller.selectedNodeId);
+  $: selectedNode = $controller.nodes.find(
+    (node) => node.id === $controller.selectedNodeId,
+  );
   $: selectedEdges = selectedNode
-    ? $controller.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).slice(0, 8)
+    ? $controller.edges
+        .filter(
+          (edge) =>
+            edge.source === selectedNode.id || edge.target === selectedNode.id,
+        )
+        .slice(0, 8)
     : [];
 
   function select(node) {
@@ -25,7 +32,6 @@
   }
 
   $: labelIds = prominentNodeIds($controller.nodes, $controller.edges);
-
 </script>
 
 <section class="graph-section" aria-labelledby="graph-heading">
@@ -35,38 +41,81 @@
         <p class="eyebrow">ENTITAS DAN RELASI</p>
         <h2 id="graph-heading">Peta knowledge graph</h2>
       </div>
-      <button class="button secondary" type="button" onclick={() => controller.load(workspace)} disabled={$controller.busy}>
-        {$controller.busy ? "Memuat…" : "Muat ulang graph"}
-      </button>
+      <div class="flex">
+        {#if $controller.busy}
+          <button
+            class="button secondary"
+            type="button"
+            onclick={() => controller.cancel()}>Batalkan</button
+          >
+        {/if}
+        <button
+          class="button secondary"
+          type="button"
+          onclick={() => controller.load(workspace)}
+          disabled={$controller.busy}
+        >
+          {$controller.busy ? "Memuat…" : "Muat ulang graph"}
+        </button>
+      </div>
     </div>
     {#if $controller.error}
       <div class="notice error-notice" role="alert">{$controller.error}</div>
     {:else if $controller.busy && $controller.nodes.length === 0}
-      <p class="state-message" role="status" aria-live="polite">{$controller.stage || "Membaca graph…"}</p>
+      <p class="state-message" role="status" aria-live="polite">
+        {$controller.stage || "Membaca graph…"}
+      </p>
     {:else if $controller.nodes.length === 0}
       <div class="empty-state">
         <h3>Graph masih kosong</h3>
-        <p>Ingest dokumen dengan Neo4j aktif agar entitas dan relasinya muncul di sini.</p>
+        <p>
+          Ingest dokumen dengan Neo4j aktif agar entitas dan relasinya muncul di
+          sini.
+        </p>
       </div>
     {:else}
       <div class="graph-summary">
         <span><strong>{$controller.nodes.length}</strong> entitas</span>
         <span><strong>{$controller.edges.length}</strong> relasi</span>
-        {#if $controller.truncated}<span class="field-hint">Tampilan dibatasi agar graph tetap terbaca.</span>{/if}
+        {#if $controller.truncated}<span class="field-hint"
+            >Tampilan dibatasi agar graph tetap terbaca.</span
+          >{/if}
       </div>
-      <p class="field-hint graph-help">Label menyorot node paling terhubung. Pilih titik untuk detail; geser area grafik ke samping pada layar sempit.</p>
+      <p class="field-hint graph-help">
+        Label menyorot node paling terhubung. Pilih titik untuk detail; geser
+        area grafik ke samping pada layar sempit.
+      </p>
       {#if $controller.progressLog.length}
-        <ol class="progress-log" aria-label="Tahap baca knowledge graph" aria-live="polite">
+        <ol
+          class="progress-log"
+          aria-label="Tahap baca knowledge graph"
+          aria-live="polite"
+        >
           {#each $controller.progressLog as entry (entry.id)}
             <li><span>{entry.kind}</span>{entry.message}</li>
           {/each}
         </ol>
       {/if}
-      {#if $controller.busy}<p class="stream-status" role="status" aria-live="polite">{$controller.stage}</p>{/if}
+      {#if $controller.busy}<p
+          class="stream-status"
+          role="status"
+          aria-live="polite"
+        >
+          {$controller.stage}
+        </p>{/if}
       <div class="graph-layout">
-        <div class="graph-scroll" role="region" aria-label="Knowledge graph, area dapat digulir horizontal pada layar kecil">
+        <div
+          class="graph-scroll"
+          role="region"
+          aria-label="Knowledge graph, area dapat digulir horizontal pada layar kecil"
+        >
           <div class="graph-canvas">
-            <svg class="graph-svg" viewBox="0 0 780 560" aria-hidden="true" focusable="false">
+            <svg
+              class="graph-svg"
+              viewBox="0 0 780 560"
+              aria-hidden="true"
+              focusable="false"
+            >
               <g class="edges">
                 {#each $controller.edges as edge (edge.id)}
                   {#if $controller.positions[edge.source] && $controller.positions[edge.target]}
@@ -93,8 +142,15 @@
                     title={`${node.label}, ${node.type}`}
                     onclick={() => select(node)}
                   >
-                    <span class={labelIds.has(node.id) || $controller.selectedNodeId === node.id ? "node-label" : "sr-only"}>
-                      {node.label.length > 22 ? `${node.label.slice(0, 20)}…` : node.label}
+                    <span
+                      class={labelIds.has(node.id) ||
+                      $controller.selectedNodeId === node.id
+                        ? "node-label"
+                        : "sr-only"}
+                    >
+                      {node.label.length > 22
+                        ? `${node.label.slice(0, 20)}…`
+                        : node.label}
                     </span>
                   </button>
                 {/if}
@@ -102,17 +158,25 @@
             </div>
           </div>
         </div>
-        <aside class="node-detail" aria-live="polite" aria-label="Detail entitas yang dipilih">
+        <aside
+          class="node-detail"
+          aria-live="polite"
+          aria-label="Detail entitas yang dipilih"
+        >
           {#if selectedNode}
             <p class="eyebrow">ENTITAS DIPILIH</p>
             <h3>{selectedNode.label}</h3>
             <p class="node-type">{selectedNode.type}</p>
-            <p>{selectedNode.description || "Tidak ada deskripsi tersimpan."}</p>
+            <p>
+              {selectedNode.description || "Tidak ada deskripsi tersimpan."}
+            </p>
             <p class="node-id">{selectedNode.id}</p>
             {#if selectedEdges.length}
               <h4>Relasi</h4>
               <ul class="relation-list">
-                {#each selectedEdges as edge (edge.id)}<li>{edge.label || "terkait"}</li>{/each}
+                {#each selectedEdges as edge (edge.id)}<li>
+                    {edge.label || "terkait"}
+                  </li>{/each}
               </ul>
             {/if}
           {:else}

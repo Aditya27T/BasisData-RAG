@@ -255,8 +255,8 @@ h4 {
 }
 
 .workspace-form label,
-.chat-form > label,
-.file-field > span {
+.chat-form>label,
+.file-field>span {
   display: block;
   margin-bottom: 0.35rem;
   color: var(--muted);
@@ -555,7 +555,7 @@ h4 {
 }
 
 .chat-panel {
-  width: min(100%, 980px);
+  /* width: min(100%, 980px); */
   margin: 0 auto;
 }
 
@@ -948,7 +948,7 @@ h4 {
     align-items: flex-start;
   }
 
-  .panel-heading > .button {
+  .panel-heading>.button {
     max-width: 45%;
     white-space: normal;
   }
@@ -999,6 +999,7 @@ h4 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -1065,7 +1066,7 @@ h4 {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .top-actions > * {
+  .top-actions>* {
     width: 100%;
     min-width: 0;
   }
@@ -1074,7 +1075,7 @@ h4 {
     flex-wrap: wrap;
   }
 
-  .panel-heading > .button {
+  .panel-heading>.button {
     width: 100%;
     max-width: none;
   }
